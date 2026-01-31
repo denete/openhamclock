@@ -335,6 +335,136 @@ app.get('/api/dxcluster/sources', (req, res) => {
 });
 
 // ============================================
+// DX SPOT PATHS API - Get spots with locations for map visualization
+// Returns spots from the last 5 minutes with spotter and DX locations
+// ============================================
+
+// Cache for DX spot paths to avoid excessive lookups
+let dxSpotPathsCache = { paths: [], timestamp: 0 };
+const DXPATHS_CACHE_TTL = 30000; // 30 seconds cache
+
+app.get('/api/dxcluster/paths', async (req, res) => {
+  // Check cache first
+  if (Date.now() - dxSpotPathsCache.timestamp < DXPATHS_CACHE_TTL && dxSpotPathsCache.paths.length > 0) {
+    console.log('[DX Paths] Returning', dxSpotPathsCache.paths.length, 'cached paths');
+    return res.json(dxSpotPathsCache.paths);
+  }
+  
+  try {
+    // Get recent DX spots from HamQTH
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    
+    const response = await fetch('https://www.hamqth.com/dxc_csv.php?limit=50', {
+      headers: { 'User-Agent': 'OpenHamClock/3.5' },
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    
+    if (!response.ok) {
+      return res.json([]);
+    }
+    
+    const text = await response.text();
+    const lines = text.trim().split('\n').filter(line => line.includes('^'));
+    
+    // Parse spots and filter to last 5 minutes
+    const now = new Date();
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+    const spots = [];
+    
+    for (const line of lines) {
+      const parts = line.split('^');
+      if (parts.length < 5) continue;
+      
+      const spotter = parts[0]?.trim().toUpperCase();
+      const freqKhz = parseFloat(parts[1]) || 0;
+      const dxCall = parts[2]?.trim().toUpperCase();
+      const comment = parts[3]?.trim() || '';
+      const timeDate = parts[4]?.trim() || '';
+      
+      if (!spotter || !dxCall || freqKhz <= 0) continue;
+      
+      // Parse time: "2149 2025-05-27" -> check if within last 5 minutes
+      // Note: HamQTH shows UTC time, format is "HHMM YYYY-MM-DD"
+      let spotTime = null;
+      if (timeDate.length >= 15) {
+        const timeStr = timeDate.substring(0, 4); // HHMM
+        const dateStr = timeDate.substring(5);    // YYYY-MM-DD
+        const hours = parseInt(timeStr.substring(0, 2));
+        const minutes = parseInt(timeStr.substring(2, 4));
+        spotTime = new Date(`${dateStr}T${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:00Z`);
+      }
+      
+      // Include spot if we couldn't parse time or if it's within 5 minutes
+      if (!spotTime || spotTime >= fiveMinutesAgo) {
+        spots.push({
+          spotter,
+          dxCall,
+          freq: (freqKhz / 1000).toFixed(3),
+          comment,
+          time: timeDate.length >= 4 ? timeDate.substring(0, 2) + ':' + timeDate.substring(2, 4) + 'z' : ''
+        });
+      }
+    }
+    
+    // Get unique callsigns to look up
+    const allCalls = new Set();
+    spots.forEach(s => {
+      allCalls.add(s.spotter);
+      allCalls.add(s.dxCall);
+    });
+    
+    // Look up locations for all callsigns (limit to 40 to avoid timeouts)
+    const locations = {};
+    const callsToLookup = [...allCalls].slice(0, 40);
+    
+    for (const call of callsToLookup) {
+      const loc = estimateLocationFromPrefix(call);
+      if (loc) {
+        locations[call] = { lat: loc.lat, lon: loc.lon, country: loc.country };
+      }
+    }
+    
+    // Build paths with both locations
+    const paths = spots
+      .map(spot => {
+        const spotterLoc = locations[spot.spotter];
+        const dxLoc = locations[spot.dxCall];
+        
+        if (spotterLoc && dxLoc) {
+          return {
+            spotter: spot.spotter,
+            spotterLat: spotterLoc.lat,
+            spotterLon: spotterLoc.lon,
+            spotterCountry: spotterLoc.country,
+            dxCall: spot.dxCall,
+            dxLat: dxLoc.lat,
+            dxLon: dxLoc.lon,
+            dxCountry: dxLoc.country,
+            freq: spot.freq,
+            comment: spot.comment,
+            time: spot.time
+          };
+        }
+        return null;
+      })
+      .filter(p => p !== null)
+      .slice(0, 25); // Limit to 25 paths to avoid cluttering the map
+    
+    console.log('[DX Paths]', paths.length, 'paths with locations from', spots.length, 'spots');
+    
+    // Update cache
+    dxSpotPathsCache = { paths, timestamp: Date.now() };
+    
+    res.json(paths);
+  } catch (error) {
+    console.error('[DX Paths] Error:', error.message);
+    res.json([]);
+  }
+});
+
+// ============================================
 // CALLSIGN LOOKUP API (for getting location from callsign)
 // ============================================
 

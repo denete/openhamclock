@@ -736,6 +736,42 @@
     };
 
     // ============================================
+    // DX PATHS HOOK - DX spots with locations for map visualization
+    // ============================================
+    const useDXPaths = () => {
+      const [data, setData] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        const fetchPaths = async () => {
+          try {
+            const response = await fetch('/api/dxcluster/paths');
+            
+            if (response.ok) {
+              const paths = await response.json();
+              setData(paths);
+              console.log('[DX Paths] Loaded', paths.length, 'paths');
+            } else {
+              setData([]);
+            }
+          } catch (err) {
+            console.error('DX Paths error:', err);
+            setData([]);
+          } finally {
+            setLoading(false);
+          }
+        };
+        
+        fetchPaths();
+        // Refresh every 30 seconds
+        const interval = setInterval(fetchPaths, 30000);
+        return () => clearInterval(interval);
+      }, []);
+
+      return { data, loading };
+    };
+
+    // ============================================
     // MY SPOTS HOOK - Spots involving the user's callsign
     // ============================================
     const useMySpots = (callsign) => {
@@ -1346,7 +1382,7 @@
     // ============================================
     // LEAFLET MAP COMPONENT
     // ============================================
-    const WorldMap = ({ deLocation, dxLocation, onDXChange, potaSpots, mySpots, satellites }) => {
+    const WorldMap = ({ deLocation, dxLocation, onDXChange, potaSpots, mySpots, dxPaths, satellites }) => {
       const mapRef = useRef(null);
       const mapInstanceRef = useRef(null);
       const tileLayerRef = useRef(null);
@@ -1358,10 +1394,13 @@
       const potaMarkersRef = useRef([]);
       const mySpotsMarkersRef = useRef([]);
       const mySpotsLinesRef = useRef([]);
+      const dxPathsLinesRef = useRef([]);
+      const dxPathsMarkersRef = useRef([]);
       const satMarkersRef = useRef([]);
       const satTracksRef = useRef([]);
       const [mapStyle, setMapStyle] = useState('dark');
       const [showSatellites, setShowSatellites] = useState(true);
+      const [showDXPaths, setShowDXPaths] = useState(true);
 
       // Initialize map
       useEffect(() => {
@@ -1577,6 +1616,75 @@
         }
       }, [mySpots, deLocation]);
 
+      // Update DX paths - lines showing who spotted whom
+      useEffect(() => {
+        if (!mapInstanceRef.current) return;
+        const map = mapInstanceRef.current;
+
+        // Remove old DX paths
+        dxPathsLinesRef.current.forEach(l => map.removeLayer(l));
+        dxPathsLinesRef.current = [];
+        dxPathsMarkersRef.current.forEach(m => map.removeLayer(m));
+        dxPathsMarkersRef.current = [];
+
+        // Add new DX paths if enabled
+        if (showDXPaths && dxPaths && dxPaths.length > 0) {
+          dxPaths.forEach((path, index) => {
+            // Draw great circle line from spotter to DX station
+            const pathPoints = getGreatCirclePoints(
+              path.spotterLat, path.spotterLon,
+              path.dxLat, path.dxLon
+            );
+            
+            // Use different colors based on band (derived from frequency)
+            const freq = parseFloat(path.freq);
+            let color = '#4488ff'; // Default blue
+            if (freq >= 1.8 && freq < 2) color = '#ff6666';      // 160m - red
+            else if (freq >= 3.5 && freq < 4) color = '#ff9966'; // 80m - orange
+            else if (freq >= 7 && freq < 7.5) color = '#ffcc66'; // 40m - yellow
+            else if (freq >= 10 && freq < 10.5) color = '#99ff66'; // 30m - lime
+            else if (freq >= 14 && freq < 14.5) color = '#66ff99'; // 20m - green
+            else if (freq >= 18 && freq < 18.5) color = '#66ffcc'; // 17m - teal
+            else if (freq >= 21 && freq < 21.5) color = '#66ccff'; // 15m - cyan
+            else if (freq >= 24 && freq < 25) color = '#6699ff'; // 12m - blue
+            else if (freq >= 28 && freq < 30) color = '#9966ff'; // 10m - purple
+            else if (freq >= 50 && freq < 54) color = '#ff66ff'; // 6m - magenta
+            
+            // Handle antimeridian crossing
+            const segments = Array.isArray(pathPoints[0]) ? pathPoints : [pathPoints];
+            segments.forEach(segment => {
+              const line = L.polyline(segment, {
+                color: color,
+                weight: 1.5,
+                opacity: 0.5
+              }).addTo(map);
+              dxPathsLinesRef.current.push(line);
+            });
+
+            // Add small markers at DX station end only (to reduce clutter)
+            const dxIcon = L.divIcon({
+              className: '',
+              html: `<div style="width: 6px; height: 6px; background: ${color}; border-radius: 50%; border: 1px solid white; box-shadow: 0 0 3px ${color};"></div>`,
+              iconSize: [6, 6],
+              iconAnchor: [3, 3]
+            });
+            
+            const marker = L.marker([path.dxLat, path.dxLon], { icon: dxIcon })
+              .bindPopup(`
+                <div style="font-family: JetBrains Mono, monospace; font-size: 12px;">
+                  <b style="color: ${color}">${path.dxCall}</b><br>
+                  <span style="color: #888">spotted by</span> <b>${path.spotter}</b><br>
+                  <b>${path.freq} MHz</b><br>
+                  ${path.comment || ''}<br>
+                  <span style="color: #666">${path.time}</span>
+                </div>
+              `)
+              .addTo(map);
+            dxPathsMarkersRef.current.push(marker);
+          });
+        }
+      }, [dxPaths, showDXPaths]);
+
       useEffect(() => {
         if (!mapInstanceRef.current) return;
         const map = mapInstanceRef.current;
@@ -1727,6 +1835,30 @@
             }}
           >
             🛰 {showSatellites ? 'SATS ON' : 'SATS OFF'}
+          </button>
+          
+          {/* DX Paths toggle */}
+          <button
+            onClick={() => setShowDXPaths(!showDXPaths)}
+            style={{
+              position: 'absolute',
+              top: '10px',
+              left: '155px',
+              background: showDXPaths ? 'rgba(68, 136, 255, 0.2)' : 'rgba(0, 0, 0, 0.7)',
+              border: `1px solid ${showDXPaths ? '#4488ff' : '#666'}`,
+              color: showDXPaths ? '#4488ff' : '#888',
+              padding: '6px 10px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontFamily: 'JetBrains Mono',
+              cursor: 'pointer',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            📡 {showDXPaths ? 'DX ON' : 'DX OFF'}
           </button>
         </div>
       );
@@ -2033,7 +2165,7 @@
     const LegacyLayout = ({ 
       config, currentTime, utcTime, utcDate, localTime, localDate,
       deGrid, dxGrid, deSunTimes, dxSunTimes, dxLocation, onDXChange,
-      spaceWeather, bandConditions, potaSpots, dxCluster, contests, propagation, mySpots, satellites,
+      spaceWeather, bandConditions, potaSpots, dxCluster, dxPaths, contests, propagation, mySpots, satellites,
       onSettingsClick
     }) => {
       const bearing = calculateBearing(config.location.lat, config.location.lon, dxLocation.lat, dxLocation.lon);
@@ -2194,6 +2326,7 @@
               onDXChange={onDXChange} 
               potaSpots={potaSpots.data}
               mySpots={mySpots.data}
+              dxPaths={dxPaths.data}
               satellites={satellites.positions}
             />
           </div>
@@ -2676,6 +2809,7 @@
       const bandConditions = useBandConditions(spaceWeather.data);
       const potaSpots = usePOTASpots();
       const dxCluster = useDXCluster(config.dxClusterSource || 'auto');
+      const dxPaths = useDXPaths();
       const contests = useContests();
       const propagation = usePropagation(config.location, dxLocation);
       const mySpots = useMySpots(config.callsign);
@@ -2728,6 +2862,7 @@
               bandConditions={bandConditions}
               potaSpots={potaSpots}
               dxCluster={dxCluster}
+              dxPaths={dxPaths}
               contests={contests}
               propagation={propagation}
               mySpots={mySpots}
@@ -2912,7 +3047,7 @@
           
           {/* CENTER - MAP */}
           <div style={{ position: 'relative', borderRadius: '6px', overflow: 'hidden' }}>
-            <WorldMap deLocation={config.location} dxLocation={dxLocation} onDXChange={handleDXChange} potaSpots={potaSpots.data} mySpots={mySpots.data} satellites={satellites.positions} />
+            <WorldMap deLocation={config.location} dxLocation={dxLocation} onDXChange={handleDXChange} potaSpots={potaSpots.data} mySpots={mySpots.data} dxPaths={dxPaths.data} satellites={satellites.positions} />
             <div style={{ position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)', fontSize: '13px', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.7)', padding: '2px 8px', borderRadius: '4px' }}>
               Click map to set DX • 73 de {config.callsign}
             </div>
