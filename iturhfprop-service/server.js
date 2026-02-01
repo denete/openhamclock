@@ -210,6 +210,14 @@ async function runPrediction(params) {
   const inputPath = path.join(TEMP_DIR, `input_${id}.txt`);
   const outputPath = path.join(TEMP_DIR, `output_${id}.txt`);
   
+  // Ensure temp dir exists
+  if (!fs.existsSync(TEMP_DIR)) {
+    fs.mkdirSync(TEMP_DIR, { recursive: true });
+  }
+  
+  let execStdout = '';
+  let execStderr = '';
+  
   try {
     // Generate input file
     const inputContent = generateInputFile(params);
@@ -225,39 +233,21 @@ async function runPrediction(params) {
     console.log(`[ITURHFProp] Command: ${cmd}`);
     
     try {
-      const result = execSync(cmd, {
+      execStdout = execSync(cmd, {
         timeout: 30000,  // 30 second timeout
         encoding: 'utf8',
         env: { ...process.env, LD_LIBRARY_PATH: '/opt/iturhfprop:' + (process.env.LD_LIBRARY_PATH || '') }
       });
-      console.log(`[ITURHFProp] stdout: ${result}`);
+      console.log(`[ITURHFProp] stdout: ${execStdout}`);
     } catch (execError) {
-      console.error('[ITURHFProp] Execution failed!');
+      execStderr = execError.stderr?.toString() || '';
+      execStdout = execError.stdout?.toString() || '';
+      console.error('[ITURHFProp] Execution error!');
       console.error('[ITURHFProp] Exit code:', execError.status);
-      console.error('[ITURHFProp] stderr:', execError.stderr?.toString() || 'none');
-      console.error('[ITURHFProp] stdout:', execError.stdout?.toString() || 'none');
-      console.error('[ITURHFProp] Error:', execError.message);
+      console.error('[ITURHFProp] stderr:', execStderr);
+      console.error('[ITURHFProp] stdout:', execStdout);
       
-      // Try to get any output that was generated
-      if (!fs.existsSync(outputPath)) {
-        // Check if binary exists and is executable
-        try {
-          const stats = fs.statSync(ITURHFPROP_PATH);
-          console.log(`[ITURHFProp] Binary exists, size: ${stats.size}, mode: ${stats.mode.toString(8)}`);
-        } catch (e) {
-          console.error(`[ITURHFProp] Binary not found at ${ITURHFPROP_PATH}`);
-        }
-        
-        // Check data directory
-        try {
-          const dataFiles = fs.readdirSync(ITURHFPROP_DATA + '/Data').slice(0, 5);
-          console.log(`[ITURHFProp] Data dir contains: ${dataFiles.join(', ')}...`);
-        } catch (e) {
-          console.error(`[ITURHFProp] Data dir error: ${e.message}`);
-        }
-        
-        throw new Error(`ITURHFProp failed: ${execError.stderr?.toString() || execError.message}`);
-      }
+      // Don't throw - try to read output anyway
     }
     
     const elapsed = Date.now() - startTime;
@@ -279,6 +269,9 @@ async function runPrediction(params) {
     // Parse output
     const results = parseOutputFile(outputPath);
     results.elapsed = elapsed;
+    results.execStdout = execStdout;
+    results.execStderr = execStderr;
+    results.inputContent = inputContent;
     results.params = {
       txLat: params.txLat,
       txLon: params.txLon,
@@ -656,7 +649,10 @@ app.get('/api/bands', async (req, res) => {
       debug: {
         rawOutput: results.raw,
         freqCount: results.frequencies.length,
-        parsedFreqs: results.frequencies
+        parsedFreqs: results.frequencies,
+        execStdout: results.execStdout,
+        execStderr: results.execStderr,
+        inputContent: results.inputContent?.substring(0, 1000)
       },
       timestamp: new Date().toISOString()
     });
