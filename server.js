@@ -1129,8 +1129,29 @@ function estimateLocationFromPrefix(callsign) {
     'W8': 'EN81', 'K8': 'EN81', 'N8': 'EN81', 'AA8': 'EN81', // MI/OH/WV
     'W9': 'EN52', 'K9': 'EN52', 'N9': 'EN52', 'AA9': 'EN52', // IL/IN/WI
     'W0': 'EN31', 'K0': 'EN31', 'N0': 'EN31', 'AA0': 'EN31', // Central USA
-    // Generic USA (no district)
-    'W': 'EM79', 'K': 'EM79', 'N': 'EM79', 'AA': 'EM79', 'AB': 'EM79',
+    // Generic USA (no district) - AA through AL are all US prefixes
+    'W': 'EM79', 'K': 'EM79', 'N': 'EM79', 
+    'AA': 'EM79', 'AB': 'EM79', 'AC': 'EM79', 'AD': 'EM79', 'AE': 'EM79', 'AF': 'EM79',
+    'AG': 'EM79', 'AH': 'EM79', 'AI': 'EM79', 'AJ': 'EM79', 'AK': 'EM79', 'AL': 'EM79',
+    // US A-prefixes by call district
+    'AE0': 'EN31', 'AE1': 'FN41', 'AE2': 'FN20', 'AE3': 'FM19', 'AE4': 'EM73', 
+    'AE5': 'EM12', 'AE6': 'CM97', 'AE7': 'DN31', 'AE8': 'EN81', 'AE9': 'EN52',
+    'AC0': 'EN31', 'AC1': 'FN41', 'AC2': 'FN20', 'AC3': 'FM19', 'AC4': 'EM73',
+    'AC5': 'EM12', 'AC6': 'CM97', 'AC7': 'DN31', 'AC8': 'EN81', 'AC9': 'EN52',
+    'AD0': 'EN31', 'AD1': 'FN41', 'AD2': 'FN20', 'AD3': 'FM19', 'AD4': 'EM73',
+    'AD5': 'EM12', 'AD6': 'CM97', 'AD7': 'DN31', 'AD8': 'EN81', 'AD9': 'EN52',
+    'AF0': 'EN31', 'AF1': 'FN41', 'AF2': 'FN20', 'AF3': 'FM19', 'AF4': 'EM73',
+    'AF5': 'EM12', 'AF6': 'CM97', 'AF7': 'DN31', 'AF8': 'EN81', 'AF9': 'EN52',
+    'AG0': 'EN31', 'AG1': 'FN41', 'AG2': 'FN20', 'AG3': 'FM19', 'AG4': 'EM73',
+    'AG5': 'EM12', 'AG6': 'CM97', 'AG7': 'DN31', 'AG8': 'EN81', 'AG9': 'EN52',
+    'AI0': 'EN31', 'AI1': 'FN41', 'AI2': 'FN20', 'AI3': 'FM19', 'AI4': 'EM73',
+    'AI5': 'EM12', 'AI6': 'CM97', 'AI7': 'DN31', 'AI8': 'EN81', 'AI9': 'EN52',
+    'AJ0': 'EN31', 'AJ1': 'FN41', 'AJ2': 'FN20', 'AJ3': 'FM19', 'AJ4': 'EM73',
+    'AJ5': 'EM12', 'AJ6': 'CM97', 'AJ7': 'DN31', 'AJ8': 'EN81', 'AJ9': 'EN52',
+    'AK0': 'EN31', 'AK1': 'FN41', 'AK2': 'FN20', 'AK3': 'FM19', 'AK4': 'EM73',
+    'AK5': 'EM12', 'AK6': 'CM97', 'AK7': 'DN31', 'AK8': 'EN81', 'AK9': 'EN52',
+    'AL0': 'EN31', 'AL1': 'FN41', 'AL2': 'FN20', 'AL3': 'FM19', 'AL4': 'EM73',
+    'AL5': 'EM12', 'AL6': 'CM97', 'AL7': 'BP51', 'AL8': 'EN81', 'AL9': 'EN52', // AL7 = Alaska
     
     // Canada - by province
     'VE1': 'FN74', 'VA1': 'FN74', // Maritime
@@ -1277,13 +1298,13 @@ function estimateLocationFromPrefix(callsign) {
     }
   }
   
-  // Fallback to first character
+  // Fallback to first character (most likely country for each letter)
   const firstCharGrids = {
-    'A': 'LL55', 'B': 'PL02', 'C': 'FN03', 'D': 'JO51', 'E': 'IO63',
-    'F': 'JN18', 'G': 'IO91', 'H': 'KM72', 'I': 'JN61', 'J': 'PM95',
-    'K': 'EM79', 'L': 'GF05', 'M': 'IO91', 'N': 'EM79', 'O': 'KP20',
-    'P': 'GG87', 'R': 'KO85', 'S': 'JO89', 'T': 'KI88', 'U': 'KO85',
-    'V': 'QF56', 'W': 'EM79', 'X': 'EK09', 'Y': 'JO91', 'Z': 'KG33'
+    'A': 'EM79', 'B': 'PL02', 'C': 'FN03', 'D': 'JO51', 'E': 'IO63', // A=USA (AA-AL), B=China, C=Canada, D=Germany, E=Spain/Ireland
+    'F': 'JN18', 'G': 'IO91', 'H': 'KM72', 'I': 'JN61', 'J': 'PM95', // F=France, G=UK, H=varies, I=Italy, J=Japan
+    'K': 'EM79', 'L': 'GF05', 'M': 'IO91', 'N': 'EM79', 'O': 'KP20', // K=USA, L=Argentina, M=UK, N=USA, O=Finland
+    'P': 'GG87', 'R': 'KO85', 'S': 'JO89', 'T': 'KI88', 'U': 'KO85', // P=Brazil, R=Russia, S=Sweden, T=varies, U=Russia
+    'V': 'QF56', 'W': 'EM79', 'X': 'EK09', 'Y': 'JO91', 'Z': 'KG33'  // V=Australia, W=USA, X=Mexico, Y=varies, Z=South Africa
   };
   
   const firstChar = upper[0];
