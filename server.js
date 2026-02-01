@@ -434,8 +434,12 @@ app.get('/api/hamqsl/conditions', async (req, res) => {
 });
 
 // DX Cluster proxy - fetches from selectable sources
-// Query param: ?source=hamqth|dxspider|auto (default: auto)
+// Query param: ?source=hamqth|dxspider|proxy|auto (default: auto)
 // Note: DX Spider uses telnet - works locally but may be blocked on cloud hosting
+// The 'proxy' source uses our DX Spider Proxy microservice
+
+// DX Spider Proxy URL (sibling service on Railway or external)
+const DXSPIDER_PROXY_URL = process.env.DXSPIDER_PROXY_URL || 'https://dxspider-proxy-production-1ec7.up.railway.app';
 
 // Cache for DX Spider telnet spots (to avoid excessive connections)
 let dxSpiderCache = { spots: [], timestamp: 0 };
@@ -498,6 +502,34 @@ app.get('/api/dxcluster/spots', async (req, res) => {
       clearTimeout(timeout);
       if (error.name !== 'AbortError') {
         console.error('[DX Cluster] HamQTH error:', error.message);
+      }
+    }
+    return null;
+  }
+  
+  // Helper function for DX Spider Proxy (our microservice)
+  async function fetchDXSpiderProxy() {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    
+    try {
+      const response = await fetch(`${DXSPIDER_PROXY_URL}/api/dxcluster/spots?limit=50`, {
+        headers: { 'User-Agent': 'OpenHamClock/3.5' },
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      
+      if (response.ok) {
+        const spots = await response.json();
+        if (Array.isArray(spots) && spots.length > 0) {
+          console.log('[DX Cluster] DX Spider Proxy:', spots.length, 'spots');
+          return spots;
+        }
+      }
+    } catch (error) {
+      clearTimeout(timeout);
+      if (error.name !== 'AbortError') {
+        console.error('[DX Cluster] DX Spider Proxy error:', error.message);
       }
     }
     return null;
@@ -624,6 +656,13 @@ app.get('/api/dxcluster/spots', async (req, res) => {
   
   if (source === 'hamqth') {
     spots = await fetchHamQTH();
+  } else if (source === 'proxy') {
+    spots = await fetchDXSpiderProxy();
+    // Fallback to HamQTH if proxy fails
+    if (!spots) {
+      console.log('[DX Cluster] Proxy failed, falling back to HamQTH');
+      spots = await fetchHamQTH();
+    }
   } else if (source === 'dxspider') {
     spots = await fetchDXSpider();
     // Fallback to HamQTH if DX Spider fails
@@ -632,8 +671,11 @@ app.get('/api/dxcluster/spots', async (req, res) => {
       spots = await fetchHamQTH();
     }
   } else {
-    // Auto mode - try HamQTH first (most reliable), then DX Spider
-    spots = await fetchHamQTH();
+    // Auto mode - try Proxy first (best for Railway), then HamQTH, then DX Spider
+    spots = await fetchDXSpiderProxy();
+    if (!spots) {
+      spots = await fetchHamQTH();
+    }
     if (!spots) {
       spots = await fetchDXSpider();
     }
@@ -645,9 +687,10 @@ app.get('/api/dxcluster/spots', async (req, res) => {
 // Get available DX cluster sources
 app.get('/api/dxcluster/sources', (req, res) => {
   res.json([
-    { id: 'auto', name: 'Auto (Best Available)', description: 'Tries HamQTH first, then DX Spider' },
+    { id: 'auto', name: 'Auto (Best Available)', description: 'Tries Proxy first, then HamQTH, then direct telnet' },
+    { id: 'proxy', name: 'DX Spider Proxy ⭐', description: 'Our dedicated proxy service - real-time telnet feed via HTTP' },
     { id: 'hamqth', name: 'HamQTH', description: 'HamQTH.com CSV feed (HTTP, works everywhere)' },
-    { id: 'dxspider', name: 'DX Spider (G6NHU)', description: 'Telnet to dxspider.co.uk:7300 (works locally/Pi, may fail on cloud hosting)' }
+    { id: 'dxspider', name: 'DX Spider Direct', description: 'Direct telnet to dxspider.co.uk:7300 (works locally/Pi only)' }
   ]);
 });
 
@@ -669,50 +712,86 @@ app.get('/api/dxcluster/paths', async (req, res) => {
   }
   
   try {
-    // Get recent DX spots from HamQTH
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
-    
-    const response = await fetch('https://www.hamqth.com/dxc_csv.php?limit=50', {
-      headers: { 'User-Agent': 'OpenHamClock/3.7' },
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
-    
     const now = Date.now();
     
-    if (!response.ok) {
+    // Try proxy first for better real-time data
+    let newSpots = [];
+    let usedSource = 'none';
+    
+    try {
+      const proxyResponse = await fetch(`${DXSPIDER_PROXY_URL}/api/spots?limit=100`, {
+        headers: { 'User-Agent': 'OpenHamClock/3.7' },
+        signal: controller.signal
+      });
+      
+      if (proxyResponse.ok) {
+        const proxyData = await proxyResponse.json();
+        if (proxyData.spots && proxyData.spots.length > 0) {
+          usedSource = 'proxy';
+          newSpots = proxyData.spots.map(s => ({
+            spotter: s.spotter,
+            dxCall: s.call,
+            freq: s.freq,
+            comment: s.comment || '',
+            time: s.time || '',
+            id: `${s.call}-${s.freqKhz || s.freq}-${s.spotter}`
+          }));
+          console.log('[DX Paths] Got', newSpots.length, 'spots from proxy');
+        }
+      }
+    } catch (proxyErr) {
+      console.log('[DX Paths] Proxy failed, trying HamQTH');
+    }
+    
+    // Fallback to HamQTH if proxy failed
+    if (newSpots.length === 0) {
+      try {
+        const response = await fetch('https://www.hamqth.com/dxc_csv.php?limit=50', {
+          headers: { 'User-Agent': 'OpenHamClock/3.7' },
+          signal: controller.signal
+        });
+        
+        if (response.ok) {
+          const text = await response.text();
+          const lines = text.trim().split('\n').filter(line => line.includes('^'));
+          usedSource = 'hamqth';
+          
+          for (const line of lines) {
+            const parts = line.split('^');
+            if (parts.length < 5) continue;
+            
+            const spotter = parts[0]?.trim().toUpperCase();
+            const freqKhz = parseFloat(parts[1]) || 0;
+            const dxCall = parts[2]?.trim().toUpperCase();
+            const comment = parts[3]?.trim() || '';
+            const timeDate = parts[4]?.trim() || '';
+            
+            if (!spotter || !dxCall || freqKhz <= 0) continue;
+            
+            newSpots.push({
+              spotter,
+              dxCall,
+              freq: (freqKhz / 1000).toFixed(3),
+              comment,
+              time: timeDate.length >= 4 ? timeDate.substring(0, 2) + ':' + timeDate.substring(2, 4) + 'z' : '',
+              id: `${dxCall}-${freqKhz}-${spotter}`
+            });
+          }
+          console.log('[DX Paths] Got', newSpots.length, 'spots from HamQTH');
+        }
+      } catch (hamqthErr) {
+        console.log('[DX Paths] HamQTH also failed');
+      }
+    }
+    
+    clearTimeout(timeout);
+    
+    if (newSpots.length === 0) {
       // Return existing paths if fetch failed
       const validPaths = dxSpotPathsCache.allPaths.filter(p => (now - p.timestamp) < DXPATHS_RETENTION);
       return res.json(validPaths.slice(0, 50));
-    }
-    
-    const text = await response.text();
-    const lines = text.trim().split('\n').filter(line => line.includes('^'));
-    
-    // Parse new spots
-    const newSpots = [];
-    
-    for (const line of lines) {
-      const parts = line.split('^');
-      if (parts.length < 5) continue;
-      
-      const spotter = parts[0]?.trim().toUpperCase();
-      const freqKhz = parseFloat(parts[1]) || 0;
-      const dxCall = parts[2]?.trim().toUpperCase();
-      const comment = parts[3]?.trim() || '';
-      const timeDate = parts[4]?.trim() || '';
-      
-      if (!spotter || !dxCall || freqKhz <= 0) continue;
-      
-      newSpots.push({
-        spotter,
-        dxCall,
-        freq: (freqKhz / 1000).toFixed(3),
-        comment,
-        time: timeDate.length >= 4 ? timeDate.substring(0, 2) + ':' + timeDate.substring(2, 4) + 'z' : '',
-        id: `${dxCall}-${freqKhz}-${spotter}`
-      });
     }
     
     // Get unique callsigns to look up
