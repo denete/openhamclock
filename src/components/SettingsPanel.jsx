@@ -4,6 +4,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { calculateGridSquare } from '../utils/geo.js';
+import { useTranslation, Trans } from 'react-i18next';
 
 export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
   const [callsign, setCallsign] = useState(config?.callsign || '');
@@ -13,6 +14,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
   const [theme, setTheme] = useState(config?.theme || 'dark');
   const [layout, setLayout] = useState(config?.layout || 'modern');
   const [dxClusterSource, setDxClusterSource] = useState(config?.dxClusterSource || 'dxspider-proxy');
+  const { t } = useTranslation();
   
   // Layer controls
   const [layers, setLayers] = useState([]);
@@ -99,11 +101,11 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
         },
         (error) => {
           console.error('Geolocation error:', error);
-          alert('Unable to get location. Please enter manually.');
+          alert(t('station.settings.useLocation.error1'));
         }
       );
     } else {
-      alert('Geolocation not supported by your browser.');
+      alert(t('station.settings.useLocation.error2'));
     }
   };
 
@@ -152,16 +154,22 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
 
   if (!isOpen) return null;
 
+  const Code = ({ children }) => (
+    <code style={{ background: 'var(--bg-tertiary)', padding: '2px 4px', borderRadius: '3px' }}>
+      {children}
+    </code>
+  );
+
   const themeDescriptions = {
-    dark: '→ Modern dark theme (default)',
-    light: '→ Light theme for daytime use',
-    legacy: '→ Green terminal CRT style',
-    retro: '→ 90s Windows retro style'
+    dark: t('station.settings.theme.dark.describe'),
+    light: t('station.settings.theme.light.describe'),
+    legacy: t('station.settings.theme.legacy.describe'),
+    retro: t('station.settings.theme.retro.describe')
   };
 
   const layoutDescriptions = {
-    modern: '→ Modern responsive grid layout',
-    classic: '→ Original HamClock-style layout'
+    modern: t('station.settings.layout.modern.describe'),
+    classic: t('station.settings.layout.classic.describe')
   };
 
   return (
@@ -194,7 +202,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
           fontFamily: 'Orbitron, monospace',
           fontSize: '20px'
         }}>
-          ⚙ Settings
+          {t('station.settings.title')}
         </h2>
 
         {/* Tab Navigation */}
@@ -244,10 +252,32 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
         {/* Station Settings Tab */}
         {activeTab === 'station' && (
           <>
+            {/* First-time setup banner */}
+            {(config?.configIncomplete || config?.callsign === 'N0CALL' || !config?.locator) && (
+              <div style={{
+                background: 'rgba(255, 193, 7, 0.15)',
+                border: '1px solid var(--accent-amber)',
+                borderRadius: '8px',
+                padding: '12px 16px',
+                marginBottom: '20px',
+                fontSize: '13px'
+              }}>
+                <div style={{ color: 'var(--accent-amber)', fontWeight: '700', marginBottom: '6px' }}>
+                  {t("station.settings.welcome")}
+                </div>
+                <div style={{ color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  {t("station.settings.describe")}
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '8px' }}>
+                  <Trans i18nKey="station.settings.tip.env" components={{ envExample: <Code />, env: <Code /> }} />
+                </div>
+              </div>
+            )}
+
             {/* Callsign */}
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                Your Callsign
+                {t('station.settings.callsign')}
               </label>
               <input
                 type="text"
@@ -271,7 +301,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
             {/* Grid Square */}
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                Grid Square (or enter Lat/Lon below)
+                {t('station.settings.locator')}
               </label>
               <input
                 type="text"
@@ -298,15 +328,13 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>
-                  Latitude
+                  {t('station.settings.latitude')}
                 </label>
                 <input
                   type="number"
                   step="0.000001"
-//                  value={lat}
-//                  onChange={(e) => setLat(parseFloat(e.target.value))}
-		    value={isNaN(lat) ? '' : lat}
-                    onChange={(e) => setLat(parseFloat(e.target.value) || 0)}
+                  value={isNaN(lat) ? '' : lat}
+                  onChange={(e) => setLat(parseFloat(e.target.value) || 0)}
                   style={{
                     width: '100%',
                     padding: '10px',
@@ -322,15 +350,13 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
               </div>
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>
-                  Longitude
+                  {t('station.settings.longitude')}
                 </label>
                 <input
                   type="number"
                   step="0.000001"
-//                  value={lon}
-//                  onChange={(e) => setLon(parseFloat(e.target.value))}
-                    value={isNaN(lon) ? '' : lon}
-                    onChange={(e) => setLon(parseFloat(e.target.value) || 0)}
+                  value={isNaN(lon) ? '' : lon}
+                  onChange={(e) => setLon(parseFloat(e.target.value) || 0)}
                   style={{
                     width: '100%',
                     padding: '10px',
@@ -360,31 +386,31 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
                 marginBottom: '20px'
               }}
             >
-              📍 Use My Current Location
+              {t('station.settings.useLocation')}
             </button>
 
             {/* Theme */}
             <div style={{ marginBottom: '8px' }}>
               <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                Theme
+                {t('station.settings.theme')}
               </label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                {['dark', 'light', 'legacy', 'retro'].map((t) => (
+                {['dark', 'light', 'legacy', 'retro'].map((th) => (
                   <button
-                    key={t}
-                    onClick={() => setTheme(t)}
+                    key={th}
+                    onClick={() => setTheme(th)}
                     style={{
                       padding: '10px',
-                      background: theme === t ? 'var(--accent-amber)' : 'var(--bg-tertiary)',
-                      border: `1px solid ${theme === t ? 'var(--accent-amber)' : 'var(--border-color)'}`,
+                      background: theme === th ? 'var(--accent-amber)' : 'var(--bg-tertiary)',
+                      border: `1px solid ${theme === th ? 'var(--accent-amber)' : 'var(--border-color)'}`,
                       borderRadius: '6px',
-                      color: theme === t ? '#000' : 'var(--text-secondary)',
+                      color: theme === th ? '#000' : 'var(--text-secondary)',
                       fontSize: '12px',
                       cursor: 'pointer',
-                      fontWeight: theme === t ? '600' : '400'
+                      fontWeight: theme === th ? '600' : '400'
                     }}
                   >
-                    {t === 'dark' ? '🌙' : t === 'light' ? '☀️' : t === 'legacy' ? '💻' : '🪟'} {t.charAt(0).toUpperCase() + t.slice(1)}
+                    {th === 'dark' ? '🌙' : th === 'light' ? '☀️' : th === 'legacy' ? '💻' : '🪟'} {t('station.settings.theme.' + th)}
                   </button>
                 ))}
               </div>
@@ -396,7 +422,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
             {/* Layout */}
             <div style={{ marginBottom: '8px' }}>
               <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                Layout
+                {t('station.settings.layout')}
               </label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
                 {['modern', 'classic'].map((l) => (
@@ -414,7 +440,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
                       fontWeight: layout === l ? '600' : '400'
                     }}
                   >
-                    {l === 'modern' ? '🖥️' : '📺'} {l.charAt(0).toUpperCase() + l.slice(1)}
+                    {l === 'modern' ? '🖥️' : '📺'} {t('station.settings.layout.' + l)}
                   </button>
                 ))}
               </div>
@@ -426,7 +452,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
             {/* DX Cluster Source */}
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                DX Cluster Source
+                {t('station.settings.dx.title')}
               </label>
               <select
                 value={dxClusterSource}
@@ -443,13 +469,13 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
                   cursor: 'pointer'
                 }}
               >
-                <option value="dxspider-proxy">⭐ DX Spider Proxy (Recommended)</option>
-                <option value="hamqth">HamQTH Cluster</option>
-                <option value="dxwatch">DXWatch</option>
-                <option value="auto">Auto (try all sources)</option>
+                <option value="dxspider-proxy">{t('station.settings.dx.option1')}</option>
+                <option value="hamqth">{t('station.settings.dx.option2')}</option>
+                <option value="dxwatch">{t('station.settings.dx.option3')}</option>
+                <option value="auto">{t('station.settings.dx.option4')}</option>
               </select>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                → Real-time DX Spider feed via our dedicated proxy service
+                {t('station.settings.dx.describe')}
               </div>
             </div>
           </>
@@ -572,7 +598,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
               cursor: 'pointer'
             }}
           >
-            Cancel
+            {t('cancel')}
           </button>
           <button
             onClick={handleSave}
@@ -587,12 +613,12 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
               cursor: 'pointer'
             }}
           >
-            Save Settings
+            {t('station.settings.button.save')}
           </button>
         </div>
 
         <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '11px', color: 'var(--text-muted)' }}>
-          Settings are saved in your browser
+          {t('station.settings.button.save.confirm')}
         </div>
       </div>
     </div>
