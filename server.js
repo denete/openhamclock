@@ -192,16 +192,26 @@ function logErrorOnce(category, message) {
   return false;
 }
 
-// Serve static files - use 'dist' in production (Vite build), 'public' in development
-const staticDir = process.env.NODE_ENV === 'production' 
-  ? path.join(__dirname, 'dist')
-  : path.join(__dirname, 'public');
-app.use(express.static(staticDir));
+// Serve static files
+// dist/ contains the built React app (from npm run build)
+// public/ contains the fallback page if build hasn't run
+const distDir = path.join(__dirname, 'dist');
+const publicDir = path.join(__dirname, 'public');
 
-// Also serve public folder for any additional assets
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, 'public')));
+// Check if dist/ exists (has index.html from build)
+const distExists = fs.existsSync(path.join(distDir, 'index.html'));
+
+if (distExists) {
+  // Serve built React app from dist/
+  app.use(express.static(distDir));
+  console.log('[Server] Serving React app from dist/');
+} else {
+  // No build found - serve placeholder from public/
+  console.log('[Server] ⚠️  No build found! Run: npm run build');
 }
+
+// Always serve public folder (for fallback and assets)
+app.use(express.static(publicDir));
 
 // ============================================
 // API PROXY ENDPOINTS
@@ -3083,9 +3093,11 @@ app.get('/api/config', (req, res) => {
 // ============================================
 
 app.get('*', (req, res) => {
-  const indexPath = process.env.NODE_ENV === 'production'
-    ? path.join(__dirname, 'dist', 'index.html')
-    : path.join(__dirname, 'public', 'index.html');
+  // Try dist first (built React app), fallback to public (monolithic)
+  const distIndex = path.join(__dirname, 'dist', 'index.html');
+  const publicIndex = path.join(__dirname, 'public', 'index.html');
+  
+  const indexPath = fs.existsSync(distIndex) ? distIndex : publicIndex;
   res.sendFile(indexPath);
 });
 
