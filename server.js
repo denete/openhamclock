@@ -274,6 +274,9 @@ const visitorStats = {
   today: new Date().toISOString().slice(0, 10),  // YYYY-MM-DD
   uniqueIPs: new Set(),
   totalRequests: 0,
+  allTimeVisitors: 0,    // Cumulative unique visitors since server start
+  allTimeRequests: 0,    // Cumulative requests since server start
+  serverStarted: new Date().toISOString(),
   history: []  // Last 30 days of { date, uniqueVisitors, totalRequests }
 };
 
@@ -290,8 +293,11 @@ function rolloverVisitorStats() {
     if (visitorStats.history.length > 30) {
       visitorStats.history = visitorStats.history.slice(-30);
     }
-    console.log(`[Visitors] Daily summary for ${visitorStats.today}: ${visitorStats.uniqueIPs.size} unique visitors, ${visitorStats.totalRequests} total requests`);
-    // Reset for new day
+    const avg = visitorStats.history.length > 0
+      ? Math.round(visitorStats.history.reduce((sum, d) => sum + d.uniqueVisitors, 0) / visitorStats.history.length)
+      : 0;
+    console.log(`[Visitors] Daily summary for ${visitorStats.today}: ${visitorStats.uniqueIPs.size} unique visitors, ${visitorStats.totalRequests} requests | All-time: ${visitorStats.allTimeVisitors} visitors, ${visitorStats.allTimeRequests} requests | ${visitorStats.history.length}-day avg: ${avg}/day`);
+    // Reset daily counters for new day
     visitorStats.today = now;
     visitorStats.uniqueIPs = new Set();
     visitorStats.totalRequests = 0;
@@ -311,9 +317,11 @@ app.use((req, res, next) => {
     const isNew = !visitorStats.uniqueIPs.has(ip);
     visitorStats.uniqueIPs.add(ip);
     visitorStats.totalRequests++;
+    visitorStats.allTimeRequests++;
     
     if (isNew) {
-      logInfo(`[Visitors] New visitor today (#${visitorStats.uniqueIPs.size}) from ${ip.replace(/\d+$/, 'x')}`);
+      visitorStats.allTimeVisitors++;
+      logInfo(`[Visitors] New visitor today (#${visitorStats.uniqueIPs.size}, #${visitorStats.allTimeVisitors} all-time) from ${ip.replace(/\d+$/, 'x')}`);
     }
   }
   
@@ -323,8 +331,11 @@ app.use((req, res, next) => {
 // Log visitor count every hour
 setInterval(() => {
   rolloverVisitorStats();
-  if (visitorStats.uniqueIPs.size > 0) {
-    console.log(`[Visitors] Today so far: ${visitorStats.uniqueIPs.size} unique visitors, ${visitorStats.totalRequests} requests`);
+  if (visitorStats.uniqueIPs.size > 0 || visitorStats.allTimeVisitors > 0) {
+    const avg = visitorStats.history.length > 0
+      ? Math.round(visitorStats.history.reduce((sum, d) => sum + d.uniqueVisitors, 0) / visitorStats.history.length)
+      : visitorStats.uniqueIPs.size;
+    console.log(`[Visitors] Today so far: ${visitorStats.uniqueIPs.size} unique, ${visitorStats.totalRequests} requests | All-time: ${visitorStats.allTimeVisitors} visitors | Avg: ${avg}/day`);
   }
 }, 60 * 60 * 1000);
 
@@ -3659,6 +3670,9 @@ function getLastWeekendOfMonth(year, month) {
 
 app.get('/api/health', (req, res) => {
   rolloverVisitorStats();
+  const avg = visitorStats.history.length > 0
+    ? Math.round(visitorStats.history.reduce((sum, d) => sum + d.uniqueVisitors, 0) / visitorStats.history.length)
+    : visitorStats.uniqueIPs.size;
   res.json({
     status: 'ok',
     version: APP_VERSION,
@@ -3670,6 +3684,12 @@ app.get('/api/health', (req, res) => {
         uniqueVisitors: visitorStats.uniqueIPs.size,
         totalRequests: visitorStats.totalRequests
       },
+      allTime: {
+        since: visitorStats.serverStarted,
+        uniqueVisitors: visitorStats.allTimeVisitors,
+        totalRequests: visitorStats.allTimeRequests
+      },
+      dailyAverage: avg,
       history: visitorStats.history
     }
   });
