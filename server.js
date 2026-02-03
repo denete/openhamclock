@@ -2249,6 +2249,106 @@ app.get('/api/pskreporter/:callsign', async (req, res) => {
 });
 
 // ============================================
+// REVERSE BEACON NETWORK (RBN) API
+// ============================================
+
+// RBN endpoint - who's hearing YOUR signal
+let rbnCache = new Map(); // Cache by callsign
+const RBN_CACHE_TTL = 2 * 60 * 1000; // 2 minutes cache
+
+app.get('/api/rbn', async (req, res) => {
+  const callsign = (req.query.callsign || '').toUpperCase().trim();
+  const limit = parseInt(req.query.limit) || 100;
+  
+  if (!callsign || callsign === 'N0CALL') {
+    return res.json([]);
+  }
+  
+  const now = Date.now();
+  const cached = rbnCache.get(callsign);
+  
+  // Return cached data if fresh
+  if (cached && (now - cached.timestamp) < RBN_CACHE_TTL) {
+    return res.json(cached.data);
+  }
+  
+  try {
+    // RBN API endpoint - using their telnet/web gateway
+    // Format: Recent spots where callsign was heard
+    const url = `https://www.reversebeacon.net/dxsd1/dxsd1.php?f=0&c=${encodeURIComponent(callsign)}&t=skimmer`;
+    
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    
+    const response = await fetch(url, {
+      headers: { 
+        'User-Agent': 'OpenHamClock/3.12 (Amateur Radio Dashboard)',
+        'Accept': 'application/json, text/plain, */*'
+      },
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    
+    if (!response.ok) {
+      throw new Error(`RBN API returned ${response.status}`);
+    }
+    
+    const contentType = response.headers.get('content-type');
+    let spots = [];
+    
+    if (contentType && contentType.includes('application/json')) {
+      spots = await response.json();
+    } else {
+      // Parse text/HTML response if needed
+      const text = await response.text();
+      
+      // Try to extract JSON from response
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        try {
+          spots = JSON.parse(jsonMatch[0]);
+        } catch (e) {
+          console.error('[RBN] Failed to parse JSON from response');
+        }
+      }
+    }
+    
+    // Normalize the data format
+    const normalizedSpots = (Array.isArray(spots) ? spots : []).map(spot => ({
+      callsign: spot.callsign || spot.de || spot.dx_call,
+      frequency: spot.frequency || spot.freq || spot.dx_freq,
+      band: spot.band,
+      snr: spot.snr !== undefined ? spot.snr : (spot.db || spot.decibels || 0),
+      mode: spot.mode || 'CW',
+      grid: spot.grid || spot.de_grid || spot.dx_grid,
+      timestamp: spot.timestamp || spot.time || spot.dx_time || new Date().toISOString(),
+      wpm: spot.wpm || spot.speed,
+      comment: spot.comment
+    })).slice(0, limit);
+    
+    // Cache the results
+    rbnCache.set(callsign, {
+      data: normalizedSpots,
+      timestamp: now
+    });
+    
+    // Clean old cache entries
+    for (const [key, value] of rbnCache.entries()) {
+      if (now - value.timestamp > RBN_CACHE_TTL * 2) {
+        rbnCache.delete(key);
+      }
+    }
+    
+    console.log(`[RBN] Fetched ${normalizedSpots.length} spots for ${callsign}`);
+    res.json(normalizedSpots);
+    
+  } catch (error) {
+    console.error('[RBN] Error:', error.message);
+    res.json([]);
+  }
+});
+
+// ============================================
 // WSPR PROPAGATION HEATMAP API
 // ============================================
 

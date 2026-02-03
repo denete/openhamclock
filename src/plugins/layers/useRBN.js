@@ -1,0 +1,442 @@
+import { useState, useEffect, useRef } from 'react';
+
+/**
+ * Reverse Beacon Network (RBN) Plugin v1.0.0
+ * 
+ * Features:
+ * - Shows who's hearing YOUR signal
+ * - Real-time skimmer spots
+ * - Signal strength mapping (SNR heatmap)
+ * - Color-coded by signal strength
+ * - Band filter
+ * - Time window filter
+ * - Great circle paths to skimmers
+ * 
+ * Data source: Reverse Beacon Network API
+ * Update interval: 2 minutes
+ */
+
+export const metadata = {
+  id: 'rbn',
+  name: 'Reverse Beacon Network',
+  description: 'See who\'s hearing YOUR signal with SNR heatmap',
+  icon: '📡',
+  category: 'propagation',
+  defaultEnabled: false,
+  defaultOpacity: 0.7,
+  version: '1.0.0'
+};
+
+// Convert grid square to lat/lon
+function gridToLatLon(grid) {
+  if (!grid || grid.length < 4) return null;
+  
+  grid = grid.toUpperCase();
+  const lon = (grid.charCodeAt(0) - 65) * 20 - 180;
+  const lat = (grid.charCodeAt(1) - 65) * 10 - 90;
+  const lon2 = parseInt(grid[2]) * 2;
+  const lat2 = parseInt(grid[3]);
+  
+  let longitude = lon + lon2 + 1;
+  let latitude = lat + lat2 + 0.5;
+  
+  if (grid.length >= 6) {
+    const lon3 = (grid.charCodeAt(4) - 65) * (2/24);
+    const lat3 = (grid.charCodeAt(5) - 65) * (1/24);
+    longitude = lon + lon2 + lon3 + (1/24);
+    latitude = lat + lat2 + lat3 + (0.5/24);
+  }
+  
+  return { lat: latitude, lon: longitude };
+}
+
+// Get color based on SNR (signal-to-noise ratio)
+function getSNRColor(snr) {
+  if (snr === null || snr === undefined) return '#888888';
+  if (snr < 0) return '#ff3333';      // Red: Weak
+  if (snr < 10) return '#ff9933';     // Orange: Fair
+  if (snr < 20) return '#ffcc33';     // Yellow: Good
+  if (snr < 30) return '#99ff33';     // Light green: Very good
+  return '#33ff33';                   // Bright green: Excellent
+}
+
+// Get marker size based on SNR
+function getMarkerSize(snr) {
+  if (snr === null || snr === undefined) return 6;
+  if (snr < 0) return 6;
+  if (snr < 10) return 8;
+  if (snr < 20) return 10;
+  if (snr < 30) return 12;
+  return 14;
+}
+
+// Calculate great circle path
+function getGreatCirclePath(lat1, lon1, lat2, lon2, numPoints = 30) {
+  if (!isFinite(lat1) || !isFinite(lon1) || !isFinite(lat2) || !isFinite(lon2)) {
+    return [[lat1, lon1], [lat2, lon2]];
+  }
+  
+  const deltaLat = Math.abs(lat2 - lat1);
+  const deltaLon = Math.abs(lon2 - lon1);
+  if (deltaLat < 0.5 && deltaLon < 0.5) {
+    return [[lat1, lon1], [lat2, lon2]];
+  }
+  
+  const path = [];
+  
+  // Convert to radians
+  const lat1Rad = lat1 * Math.PI / 180;
+  const lon1Rad = lon1 * Math.PI / 180;
+  const lat2Rad = lat2 * Math.PI / 180;
+  const lon2Rad = lon2 * Math.PI / 180;
+  
+  // Calculate distance
+  const d = Math.acos(
+    Math.sin(lat1Rad) * Math.sin(lat2Rad) +
+    Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.cos(lon2Rad - lon1Rad)
+  );
+  
+  // Generate points along the path
+  for (let i = 0; i <= numPoints; i++) {
+    const f = i / numPoints;
+    const A = Math.sin((1 - f) * d) / Math.sin(d);
+    const B = Math.sin(f * d) / Math.sin(d);
+    
+    const x = A * Math.cos(lat1Rad) * Math.cos(lon1Rad) +
+              B * Math.cos(lat2Rad) * Math.cos(lon2Rad);
+    const y = A * Math.cos(lat1Rad) * Math.sin(lon1Rad) +
+              B * Math.cos(lat2Rad) * Math.sin(lon2Rad);
+    const z = A * Math.sin(lat1Rad) + B * Math.sin(lat2Rad);
+    
+    const lat = Math.atan2(z, Math.sqrt(x * x + y * y)) * 180 / Math.PI;
+    const lon = Math.atan2(y, x) * 180 / Math.PI;
+    
+    path.push([lat, lon]);
+  }
+  
+  return path;
+}
+
+// Convert frequency to band
+function freqToBand(freq) {
+  freq = freq / 1000; // Convert to MHz
+  if (freq >= 1.8 && freq < 2.0) return '160m';
+  if (freq >= 3.5 && freq < 4.0) return '80m';
+  if (freq >= 5.3 && freq < 5.4) return '60m';
+  if (freq >= 7.0 && freq < 7.3) return '40m';
+  if (freq >= 10.1 && freq < 10.15) return '30m';
+  if (freq >= 14.0 && freq < 14.35) return '20m';
+  if (freq >= 18.068 && freq < 18.168) return '17m';
+  if (freq >= 21.0 && freq < 21.45) return '15m';
+  if (freq >= 24.89 && freq < 24.99) return '12m';
+  if (freq >= 28.0 && freq < 29.7) return '10m';
+  if (freq >= 50.0 && freq < 54.0) return '6m';
+  return 'Other';
+}
+
+export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign = 'VE3TOS' }) {
+  const [spots, setSpots] = useState([]);
+  const [selectedBand, setSelectedBand] = useState('All');
+  const [timeWindow, setTimeWindow] = useState(30); // minutes
+  const [minSNR, setMinSNR] = useState(-10);
+  const [showPaths, setShowPaths] = useState(true);
+  const [stats, setStats] = useState({ total: 0, skimmers: 0, avgSNR: 0 });
+  
+  const layersRef = useRef([]);
+  const controlRef = useRef(null);
+  const updateIntervalRef = useRef(null);
+
+  // Fetch RBN spots
+  const fetchRBNSpots = async () => {
+    if (!callsign || callsign === 'N0CALL') {
+      console.log('[RBN] No valid callsign configured');
+      return;
+    }
+
+    try {
+      console.log(`[RBN] Fetching spots for ${callsign}...`);
+      
+      // RBN API endpoint - using their public API
+      // Format: http://www.reversebeacon.net/dxsd1/dxsd1.php?f=0&c=CALLSIGN&t=skimmer
+      const response = await fetch(
+        `/api/rbn?callsign=${encodeURIComponent(callsign)}&limit=100`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`RBN API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log(`[RBN] Received ${data.length || 0} spots`);
+      
+      if (data && Array.isArray(data)) {
+        const now = Date.now();
+        const cutoff = now - (timeWindow * 60 * 1000);
+        
+        // Filter by time window
+        const recentSpots = data.filter(spot => {
+          const spotTime = new Date(spot.timestamp || spot.time).getTime();
+          return spotTime > cutoff;
+        });
+        
+        setSpots(recentSpots);
+        
+        // Calculate statistics
+        const validSNRs = recentSpots
+          .map(s => s.snr || s.db)
+          .filter(snr => snr !== null && snr !== undefined);
+        
+        const uniqueSkimmers = new Set(recentSpots.map(s => s.callsign || s.de));
+        
+        setStats({
+          total: recentSpots.length,
+          skimmers: uniqueSkimmers.size,
+          avgSNR: validSNRs.length > 0 
+            ? (validSNRs.reduce((a, b) => a + b, 0) / validSNRs.length).toFixed(1)
+            : 0
+        });
+      }
+    } catch (error) {
+      console.error('[RBN] Error fetching spots:', error);
+    }
+  };
+
+  // Fetch data on mount and set interval
+  useEffect(() => {
+    if (enabled && callsign && callsign !== 'N0CALL') {
+      fetchRBNSpots();
+      updateIntervalRef.current = setInterval(fetchRBNSpots, 120000); // 2 minutes
+    }
+    
+    return () => {
+      if (updateIntervalRef.current) {
+        clearInterval(updateIntervalRef.current);
+      }
+    };
+  }, [enabled, callsign, timeWindow]);
+
+  // Render markers and paths
+  useEffect(() => {
+    if (!map || !enabled) return;
+
+    // Clear old layers
+    layersRef.current.forEach(layer => {
+      try {
+        map.removeLayer(layer);
+      } catch (e) {}
+    });
+    layersRef.current = [];
+
+    if (spots.length === 0) return;
+
+    // Get user's location (DE marker)
+    const deLocation = window.deLocation || { lat: 43.6785, lon: -79.2935 }; // Default to Toronto
+
+    // Filter spots
+    const filteredSpots = spots.filter(spot => {
+      const band = freqToBand(spot.frequency || spot.freq || 0);
+      const snr = spot.snr || spot.db || 0;
+      
+      if (selectedBand !== 'All' && band !== selectedBand) return false;
+      if (snr < minSNR) return false;
+      
+      return true;
+    });
+
+    console.log(`[RBN] Rendering ${filteredSpots.length} spots`);
+
+    // Render each spot
+    filteredSpots.forEach(spot => {
+      const skimmerGrid = spot.grid || spot.de_grid;
+      if (!skimmerGrid) return;
+
+      const skimmerLoc = gridToLatLon(skimmerGrid);
+      if (!skimmerLoc) return;
+
+      const snr = spot.snr || spot.db || 0;
+      const freq = spot.frequency || spot.freq || 0;
+      const band = freqToBand(freq);
+      const skimmerCall = spot.callsign || spot.de || 'Unknown';
+      const timestamp = new Date(spot.timestamp || spot.time);
+
+      // Create path line if enabled
+      if (showPaths) {
+        const pathPoints = getGreatCirclePath(
+          deLocation.lat, deLocation.lon,
+          skimmerLoc.lat, skimmerLoc.lon
+        );
+
+        const pathLine = L.polyline(pathPoints, {
+          color: getSNRColor(snr),
+          weight: 2,
+          opacity: opacity * 0.6,
+          dashArray: '5, 5'
+        });
+
+        pathLine.addTo(map);
+        layersRef.current.push(pathLine);
+      }
+
+      // Create skimmer marker
+      const markerSize = getMarkerSize(snr);
+      const markerColor = getSNRColor(snr);
+
+      const marker = L.circleMarker([skimmerLoc.lat, skimmerLoc.lon], {
+        radius: markerSize,
+        fillColor: markerColor,
+        color: '#ffffff',
+        weight: 2,
+        opacity: opacity,
+        fillOpacity: opacity * 0.8
+      });
+
+      marker.bindPopup(`
+        <div style="font-family: 'JetBrains Mono', monospace;">
+          <b>📡 ${skimmerCall}</b><br>
+          Heard: <b>${callsign}</b><br>
+          SNR: <b>${snr} dB</b><br>
+          Band: <b>${band}</b><br>
+          Freq: <b>${(freq/1000).toFixed(1)} kHz</b><br>
+          Grid: ${skimmerGrid}<br>
+          Time: ${timestamp.toLocaleTimeString()}
+        </div>
+      `);
+
+      marker.addTo(map);
+      layersRef.current.push(marker);
+    });
+
+  }, [map, enabled, spots, selectedBand, minSNR, showPaths, opacity, callsign]);
+
+  // Create control panel
+  useEffect(() => {
+    if (!map || !enabled) return;
+
+    // Create control panel
+    const control = L.control({ position: 'topright' });
+
+    control.onAdd = function() {
+      const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control rbn-control');
+      div.style.background = 'rgba(0, 0, 0, 0.85)';
+      div.style.padding = '10px';
+      div.style.borderRadius = '8px';
+      div.style.minWidth = '250px';
+      div.style.color = '#fff';
+      div.style.fontFamily = "'JetBrains Mono', monospace";
+      div.style.fontSize = '12px';
+
+      div.innerHTML = `
+        <div style="margin-bottom: 8px;">
+          <b>📡 RBN: ${callsign}</b>
+        </div>
+        <div style="margin-bottom: 8px; color: #aaa;">
+          Spots: <b>${stats.total}</b> | Skimmers: <b>${stats.skimmers}</b><br>
+          Avg SNR: <b>${stats.avgSNR} dB</b>
+        </div>
+        <div style="margin-bottom: 6px;">
+          <label>Band:</label>
+          <select id="rbn-band-select" style="width: 100%; background: #333; color: #fff; border: 1px solid #555; padding: 4px;">
+            <option value="All">All Bands</option>
+            <option value="160m">160m</option>
+            <option value="80m">80m</option>
+            <option value="40m">40m</option>
+            <option value="30m">30m</option>
+            <option value="20m">20m</option>
+            <option value="17m">17m</option>
+            <option value="15m">15m</option>
+            <option value="12m">12m</option>
+            <option value="10m">10m</option>
+            <option value="6m">6m</option>
+          </select>
+        </div>
+        <div style="margin-bottom: 6px;">
+          <label>Time: <span id="rbn-time-value">${timeWindow}</span> min</label>
+          <input type="range" id="rbn-time-slider" min="10" max="120" step="10" value="${timeWindow}" style="width: 100%;">
+        </div>
+        <div style="margin-bottom: 6px;">
+          <label>Min SNR: <span id="rbn-snr-value">${minSNR}</span> dB</label>
+          <input type="range" id="rbn-snr-slider" min="-30" max="30" step="5" value="${minSNR}" style="width: 100%;">
+        </div>
+        <div style="margin-bottom: 4px;">
+          <label>
+            <input type="checkbox" id="rbn-paths-check" ${showPaths ? 'checked' : ''}>
+            Show Paths
+          </label>
+        </div>
+        <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #444; font-size: 10px; color: #888;">
+          Data: reversebeacon.net | Update: 2min
+        </div>
+      `;
+
+      // Add event listeners
+      setTimeout(() => {
+        const bandSelect = document.getElementById('rbn-band-select');
+        const timeSlider = document.getElementById('rbn-time-slider');
+        const timeValue = document.getElementById('rbn-time-value');
+        const snrSlider = document.getElementById('rbn-snr-slider');
+        const snrValue = document.getElementById('rbn-snr-value');
+        const pathsCheck = document.getElementById('rbn-paths-check');
+
+        if (bandSelect) {
+          bandSelect.value = selectedBand;
+          bandSelect.addEventListener('change', (e) => setSelectedBand(e.target.value));
+        }
+
+        if (timeSlider && timeValue) {
+          timeSlider.addEventListener('input', (e) => {
+            const val = e.target.value;
+            timeValue.textContent = val;
+            setTimeWindow(parseInt(val));
+          });
+        }
+
+        if (snrSlider && snrValue) {
+          snrSlider.addEventListener('input', (e) => {
+            const val = e.target.value;
+            snrValue.textContent = val;
+            setMinSNR(parseInt(val));
+          });
+        }
+
+        if (pathsCheck) {
+          pathsCheck.addEventListener('change', (e) => setShowPaths(e.target.checked));
+        }
+      }, 100);
+
+      L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
+
+      return div;
+    };
+
+    control.addTo(map);
+    controlRef.current = control;
+
+    return () => {
+      if (controlRef.current) {
+        map.removeControl(controlRef.current);
+        controlRef.current = null;
+      }
+    };
+  }, [map, enabled, stats, selectedBand, timeWindow, minSNR, showPaths, callsign]);
+
+  // Cleanup on disable
+  useEffect(() => {
+    if (!enabled) {
+      layersRef.current.forEach(layer => {
+        try {
+          map.removeLayer(layer);
+        } catch (e) {}
+      });
+      layersRef.current = [];
+
+      if (controlRef.current) {
+        map.removeControl(controlRef.current);
+        controlRef.current = null;
+      }
+    }
+  }, [enabled, map]);
+
+  return null;
+}
