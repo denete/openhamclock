@@ -567,69 +567,49 @@ export function useLayer({ enabled = false, opacity = 0.5, map = null }) {
         const upperSegments = splitAtDateLine(enhancedUpper);
         const lowerSegments = splitAtDateLine(enhancedLower);
         
-        // For each upper segment, find corresponding lower segment and create polygon
-        // If there's only one segment in each, create single polygon
-        if (upperSegments.length === 1 && lowerSegments.length === 1) {
-          // No date line crossing - create single polygon
-          const enhancedZone = [...upperSegments[0], ...lowerSegments[0].reverse()];
-          const enhancedPoly = L.polygon(enhancedZone, {
-            color: '#ffaa00',
-            fillColor: '#ffaa00',
-            fillOpacity: opacity * 0.15,
-            weight: 1,
-            opacity: opacity * 0.3
-          });
-          enhancedPoly.bindPopup(`
-            <div style="font-family: 'JetBrains Mono', monospace;">
-              <b>⭐ Enhanced DX Zone</b><br>
-              Best HF propagation window<br>
-              ±5° from terminator<br>
-              Ideal for long-distance contacts
-            </div>
-          `);
-          enhancedPoly.addTo(map);
-          newLayers.push(enhancedPoly);
-        } else {
-          // Date line crossing - create multiple polygons
-          // Match segments by their longitude ranges
-          upperSegments.forEach((upperSeg, i) => {
-            // Find matching lower segment with similar longitude range
-            const upperLons = upperSeg.map(p => p[1]);
-            const upperMinLon = Math.min(...upperLons);
-            const upperMaxLon = Math.max(...upperLons);
+        console.log('🔶 Enhanced DX Zone segments:', {
+          upperCount: upperSegments.length,
+          lowerCount: lowerSegments.length,
+          upperSegmentLengths: upperSegments.map(s => s.length),
+          lowerSegmentLengths: lowerSegments.map(s => s.length)
+        });
+        
+        // Create polygon for each corresponding segment pair
+        // Both upper and lower should have same number of segments
+        const numSegments = Math.min(upperSegments.length, lowerSegments.length);
+        
+        for (let i = 0; i < numSegments; i++) {
+          const upperSeg = upperSegments[i];
+          const lowerSeg = lowerSegments[i];
+          
+          if (upperSeg.length > 1 && lowerSeg.length > 1) {
+            // Create polygon from upper segment + reversed lower segment
+            const enhancedZone = [...upperSeg, ...lowerSeg.reverse()];
             
-            // Find lower segment that overlaps with this upper segment
-            const matchingLowerSeg = lowerSegments.find(lowerSeg => {
-              const lowerLons = lowerSeg.map(p => p[1]);
-              const lowerMinLon = Math.min(...lowerLons);
-              const lowerMaxLon = Math.max(...lowerLons);
-              
-              // Check for longitude overlap
-              return (lowerMinLon <= upperMaxLon && lowerMaxLon >= upperMinLon) ||
-                     (upperMinLon <= lowerMaxLon && upperMaxLon >= lowerMinLon);
+            console.log(`🔶 Creating Enhanced DX polygon segment ${i+1}/${numSegments}:`, {
+              upperPoints: upperSeg.length,
+              lowerPoints: lowerSeg.length,
+              totalPolygonPoints: enhancedZone.length
             });
             
-            if (matchingLowerSeg && matchingLowerSeg.length > 1) {
-              const enhancedZone = [...upperSeg, ...matchingLowerSeg.reverse()];
-              const enhancedPoly = L.polygon(enhancedZone, {
-                color: '#ffaa00',
-                fillColor: '#ffaa00',
-                fillOpacity: opacity * 0.15,
-                weight: 1,
-                opacity: opacity * 0.3
-              });
-              enhancedPoly.bindPopup(`
-                <div style="font-family: 'JetBrains Mono', monospace;">
-                  <b>⭐ Enhanced DX Zone</b><br>
-                  Best HF propagation window<br>
-                  ±5° from terminator<br>
-                  Ideal for long-distance contacts
-                </div>
-              `);
-              enhancedPoly.addTo(map);
-              newLayers.push(enhancedPoly);
-            }
-          });
+            const enhancedPoly = L.polygon(enhancedZone, {
+              color: '#ffaa00',
+              fillColor: '#ffaa00',
+              fillOpacity: opacity * 0.15,
+              weight: 1,
+              opacity: opacity * 0.3
+            });
+            enhancedPoly.bindPopup(`
+              <div style="font-family: 'JetBrains Mono', monospace;">
+                <b>⭐ Enhanced DX Zone</b><br>
+                Best HF propagation window<br>
+                ±5° from terminator<br>
+                Ideal for long-distance contacts
+              </div>
+            `);
+            enhancedPoly.addTo(map);
+            newLayers.push(enhancedPoly);
+          }
         }
       }
     }
