@@ -92,24 +92,26 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
       // Check if this is a new earthquake (but not on first load)
       const isNew = !isFirstLoad.current && !previousQuakeIds.current.has(quakeId);
 
-      // Calculate marker size based on magnitude (M2.5 = 12px, M7+ = 36px)
-      const size = Math.min(Math.max(mag * 5, 12), 36);
+      // Calculate marker size based on magnitude (larger = stronger earthquake)
+      // M1-2: 16px, M3: 20px, M4: 24px, M5: 28px, M6: 32px, M7+: 40px
+      const size = Math.min(Math.max(mag * 6, 16), 40);
 
-      // Color based on magnitude
+      // Color based on magnitude (gets redder with stronger quakes)
       let color;
-      if (mag < 3) color = '#ffff00'; // Yellow - minor
-      else if (mag < 4) color = '#ffaa00'; // Orange - light
-      else if (mag < 5) color = '#ff6600'; // Deep orange - moderate
-      else if (mag < 6) color = '#ff3300'; // Red - strong
-      else if (mag < 7) color = '#cc0000'; // Dark red - major
-      else color = '#990000'; // Very dark red - great
+      if (mag < 2) color = '#90EE90'; // Light green - micro
+      else if (mag < 3) color = '#FFEB3B'; // Yellow - minor
+      else if (mag < 4) color = '#FFA500'; // Orange - light
+      else if (mag < 5) color = '#FF6600'; // Deep orange - moderate
+      else if (mag < 6) color = '#FF3300'; // Red - strong
+      else if (mag < 7) color = '#CC0000'; // Dark red - major
+      else color = '#8B0000'; // Very dark red - great
 
-      // Create earthquake icon marker with seismic wave visualization
+      // Create earthquake icon with visible shake/wave symbol
       const waveIcon = `
-        <svg width="${size*0.7}" height="${size*0.7}" viewBox="0 0 24 24" style="fill: white;">
-          <path d="M12 2L8 10h3v10h2V10h3L12 2z"/>
-          <path d="M4 12l2 2 2-2-2-2-2 2z"/>
-          <path d="M20 12l-2 2-2-2 2-2 2 2z"/>
+        <svg width="${size*0.8}" height="${size*0.8}" viewBox="0 0 32 32" style="fill: white; stroke: white; stroke-width: 1;">
+          <path d="M16 4 L13 12 L10 8 L8 16 L6 12 L4 20 M16 4 L19 12 L22 8 L24 16 L26 12 L28 20" stroke-width="2" fill="none"/>
+          <circle cx="16" cy="16" r="3" fill="white"/>
+          <path d="M16 22 L14 26 L18 26 Z" fill="white"/>
         </svg>
       `;
       
@@ -132,7 +134,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
         iconAnchor: [size/2, size/2]
       });
       
-      console.log('Creating earthquake marker:', quakeId, 'at', lat, lon, 'size:', size, 'color:', color);
+      console.log('Creating earthquake marker:', quakeId, 'M' + mag.toFixed(1), 'at', lat, lon, 'size:', size + 'px', 'color:', color);
       const circle = L.marker([lat, lon], { 
         icon, 
         opacity,
