@@ -1,10 +1,10 @@
 # WSPR Propagation Heatmap Plugin
 
-**Version:** 1.4.3  
+**Version:** 1.5.0  
 **Category:** Propagation  
 **Icon:** 📡  
 **Author:** OpenHamClock Contributors  
-**Last Updated:** 2026-02-03 (v1.4.3 Feature Release)
+**Last Updated:** 2026-02-03 (v1.5.0 Major Feature Release)
 
 ---
 
@@ -14,7 +14,42 @@ The WSPR (Weak Signal Propagation Reporter) Heatmap Plugin provides real-time vi
 
 ## Features Implemented
 
-### ✅ v1.4.3 - Separate Opacity Controls (Latest)
+### ✅ v1.5.0 - Minimize/Maximize Panel Controls (Latest)
+
+#### **Panel Minimization**
+- **All 4 Panels Minimizable**: Click any panel header to minimize/maximize
+- **Toggle Icons**: 
+  - ▼ (down arrow) = Panel expanded
+  - ▶ (right arrow) = Panel minimized
+- **Click Behavior**:
+  - Click panel header anywhere to toggle
+  - Click ▼/▶ button to toggle
+  - CTRL+drag still works when minimized
+- **State Persistence**: Minimize state saved to localStorage per panel
+- **Visual Feedback**: Hover over button shows opacity change
+
+#### **Panels You Can Minimize**
+1. **Filter Panel** (top-right) - Most useful for reducing clutter!
+   - Large panel with many controls
+   - Minimizes to just "🎛️ Filters" header
+2. **Statistics Panel** (top-left)
+   - Propagation score and counts
+   - Minimizes to "📊 WSPR Activity" header
+3. **Legend Panel** (bottom-right)
+   - Signal strength reference
+   - Minimizes to "📡 Signal Strength" header
+4. **Band Activity Chart** (bottom-left)
+   - Band activity bars
+   - Minimizes to "📊 Band Activity" header
+
+#### **Benefits**
+- Keep panels available but out of the way
+- Reduce screen clutter without losing controls
+- Quick restore with single click
+- Positions and minimize states both saved
+- Clean map view when analyzing propagation
+
+### ✅ v1.4.3 - Separate Opacity Controls
 
 #### **Independent Opacity Sliders**
 - **Path Opacity**: Control visibility of propagation paths and station markers (10-100%)
@@ -198,6 +233,17 @@ The WSPR (Weak Signal Propagation Reporter) Heatmap Plugin provides real-time vi
   - Legend Panel (bottom-right)
   - Band Activity Chart (bottom-left)
 
+### Minimizing Panels (Click Header)
+- **How to Minimize**: Click anywhere on the panel header
+  - Or click the ▼/▶ toggle button in the header
+  - Panel collapses to show only header
+  - ▶ icon indicates minimized state
+- **How to Restore**: Click header again
+  - Panel expands to show full content
+  - ▼ icon indicates expanded state
+- **State Saved**: Minimize state persists across sessions
+- **Works with CTRL+Drag**: Can drag minimized panels
+
 ### Using the Filter Panel
 - **Band Selector**: Choose specific band (160m-6m) or "All Bands"
 - **Time Window**: Select 15min, 30min, 1hr, 2hr, or 6hr
@@ -232,9 +278,11 @@ The WSPR (Weak Signal Propagation Reporter) Heatmap Plugin provides real-time vi
 - Try different time windows to see propagation changes
 - Use SNR threshold to focus on strong signals
 - Move panels to avoid covering map areas of interest
+- **Minimize large Filter panel when not adjusting settings**
 - Best DX paths are automatically highlighted
 - Enable heatmap to see activity density hot spots
-- Panel positions are saved per browser
+- Panel positions and minimize states are saved per browser
+- Click any panel header to quickly hide/show it
 
 ---
 
