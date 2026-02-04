@@ -635,9 +635,9 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
         <div style="margin-bottom: 8px;">
           <b>📡 RBN: ${callsign}</b>
         </div>
-        <div style="margin-bottom: 8px; color: #aaa;">
-          Spots: <b>${stats.total}</b> | Skimmers: <b>${stats.skimmers}</b><br>
-          Avg SNR: <b>${stats.avgSNR} dB</b>
+        <div id="rbn-stats-display" style="margin-bottom: 8px; color: #aaa;">
+          Spots: <b>0</b> | Skimmers: <b>0</b><br>
+          Avg SNR: <b>0 dB</b>
         </div>
         <div style="margin-bottom: 6px;">
           <label>Band:</label>
@@ -656,16 +656,16 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
           </select>
         </div>
         <div style="margin-bottom: 6px;">
-          <label>Time: <span id="rbn-time-value">${timeWindow < 1 ? (timeWindow * 60).toFixed(0) + 's' : timeWindow + 'min'}</span></label>
-          <input type="range" id="rbn-time-slider" min="0.1" max="15" step="0.1" value="${timeWindow}" style="width: 100%;">
+          <label>Time: <span id="rbn-time-value">5.0min</span></label>
+          <input type="range" id="rbn-time-slider" min="0.1" max="15" step="0.1" value="5" style="width: 100%;">
         </div>
         <div style="margin-bottom: 6px;">
-          <label>Min SNR: <span id="rbn-snr-value">${minSNR}</span> dB</label>
-          <input type="range" id="rbn-snr-slider" min="-30" max="30" step="5" value="${minSNR}" style="width: 100%;">
+          <label>Min SNR: <span id="rbn-snr-value">-10</span> dB</label>
+          <input type="range" id="rbn-snr-slider" min="-30" max="30" step="5" value="-10" style="width: 100%;">
         </div>
         <div style="margin-bottom: 4px;">
           <label>
-            <input type="checkbox" id="rbn-paths-check" ${showPaths ? 'checked' : ''}>
+            <input type="checkbox" id="rbn-paths-check" checked>
             Show Paths
           </label>
         </div>
@@ -689,6 +689,14 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
         }
 
         if (timeSlider && timeValue) {
+          // Set initial value
+          timeSlider.value = timeWindow;
+          if (timeWindow < 1) {
+            timeValue.textContent = (timeWindow * 60).toFixed(0) + 's';
+          } else {
+            timeValue.textContent = timeWindow.toFixed(1) + 'min';
+          }
+          
           timeSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
             // Display as seconds if < 1 minute, otherwise minutes
@@ -702,6 +710,8 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
         }
 
         if (snrSlider && snrValue) {
+          snrSlider.value = minSNR;
+          snrValue.textContent = minSNR;
           snrSlider.addEventListener('input', (e) => {
             const val = e.target.value;
             snrValue.textContent = val;
@@ -710,6 +720,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
         }
 
         if (pathsCheck) {
+          pathsCheck.checked = showPaths;
           pathsCheck.addEventListener('change', (e) => setShowPaths(e.target.checked));
         }
       }, 100);
@@ -752,7 +763,26 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
         controlRef.current = null;
       }
     };
-  }, [map, enabled, stats, selectedBand, timeWindow, minSNR, showPaths, callsign]);
+  }, [map, enabled, callsign]); // Only recreate when map, enabled, or callsign changes
+
+  // Separate effect to update stats display without recreating the entire control
+  useEffect(() => {
+    if (!enabled || !controlRef.current) return;
+    
+    const container = controlRef.current.getContainer();
+    if (!container) return;
+    
+    // Find stats display (before minimize toggle wraps content)
+    const statsDisplay = container.querySelector('#rbn-stats-display') || 
+                        container.querySelector('.rbn-panel-content #rbn-stats-display');
+    
+    if (statsDisplay) {
+      statsDisplay.innerHTML = `
+        Spots: <b>${stats.total}</b> | Skimmers: <b>${stats.skimmers}</b><br>
+        Avg SNR: <b>${stats.avgSNR} dB</b>
+      `;
+    }
+  }, [enabled, stats]);
 
   // Cleanup on disable
   useEffect(() => {
