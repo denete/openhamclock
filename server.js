@@ -2419,11 +2419,61 @@ app.get('/api/rbn/spots', async (req, res) => {
     .filter(spot => spot.timestampMs > cutoff)
     .slice(-limit); // Get most recent
   
-  console.log(`[RBN] Returning ${recentSpots.length} recent spots (last ${minutes} min)`);
+  // Enrich spots with skimmer location data
+  const enrichedSpots = await Promise.all(recentSpots.map(async (spot) => {
+    const skimmerCall = spot.callsign;
+    
+    // Check cache first
+    if (callsignLocationCache.has(skimmerCall)) {
+      const location = callsignLocationCache.get(skimmerCall);
+      return {
+        ...spot,
+        grid: location.grid,
+        skimmerLat: location.lat,
+        skimmerLon: location.lon,
+        skimmerCountry: location.country
+      };
+    }
+    
+    // Lookup location (don't block on failures)
+    try {
+      const response = await fetch(`http://localhost:${PORT}/api/callsign/${skimmerCall}`);
+      if (response.ok) {
+        const locationData = await response.json();
+        const grid = latLonToGrid(locationData.lat, locationData.lon);
+        
+        const location = {
+          callsign: skimmerCall,
+          grid: grid,
+          lat: locationData.lat,
+          lon: locationData.lon,
+          country: locationData.country
+        };
+        
+        // Cache permanently
+        callsignLocationCache.set(skimmerCall, location);
+        
+        return {
+          ...spot,
+          grid: grid,
+          skimmerLat: locationData.lat,
+          skimmerLon: locationData.lon,
+          skimmerCountry: locationData.country
+        };
+      }
+    } catch (err) {
+      // Silent fail - return spot without location
+    }
+    
+    // Return spot as-is if lookup failed
+    return spot;
+  }));
+  
+  console.log(`[RBN] Returning ${enrichedSpots.length} enriched spots (last ${minutes} min)`);
   
   res.json({
-    count: recentSpots.length,
-    spots: recentSpots,
+    count: enrichedSpots.length,
+    spots: enrichedSpots,
     minutes: minutes,
     timestamp: new Date().toISOString(),
     source: 'rbn-telnet-stream'
