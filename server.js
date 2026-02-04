@@ -2253,93 +2253,129 @@ app.get('/api/pskreporter/:callsign', async (req, res) => {
 // ============================================
 
 // RBN endpoint - who's hearing YOUR signal
-// Using PSKReporter for CW/RTTY spots (more reliable than RBN direct API)
+// Using real-time Telnet connection to RBN
 let rbnCache = new Map(); // Cache by callsign
 const RBN_CACHE_TTL = 2 * 60 * 1000; // 2 minutes cache
 
+/**
+ * Connect to RBN Telnet and collect spots
+ * Returns spots for ALL callsigns (we filter on client side)
+ */
+function fetchRBNSpotsRealtime(userCallsign, collectSeconds = 10, port = 7000) {
+  return new Promise((resolve, reject) => {
+    const spots = [];
+    let dataBuffer = '';
+    let authenticated = false;
+    
+    const client = net.createConnection({ 
+      host: 'telnet.reversebeacon.net', 
+      port: port 
+    }, () => {
+      console.log(`[RBN] Connected to telnet.reversebeacon.net:${port}`);
+    });
+
+    client.setTimeout(collectSeconds * 1000 + 5000); // Collection time + 5s buffer
+    
+    client.on('data', (data) => {
+      dataBuffer += data.toString('utf8');
+      const lines = dataBuffer.split('\n');
+      dataBuffer = lines.pop() || ''; // Keep incomplete line in buffer
+      
+      for (const line of lines) {
+        // Handle authentication prompt
+        if (line.includes('Please enter your call:') && !authenticated) {
+          client.write(`${userCallsign}\n`);
+          authenticated = true;
+          console.log(`[RBN] Authenticated as ${userCallsign}`);
+          continue;
+        }
+        
+        // Parse RBN spot line format:
+        // DX de W3LPL-#:     7003.0  K3LR           CW    30 dB  23 WPM  CQ      0123Z
+        const spotMatch = line.match(/DX de\s+(\S+)\s*:\s*([\d.]+)\s+(\S+)\s+(\S+)\s+([-\d]+)\s+dB\s+(\d+)\s+WPM/);
+        
+        if (spotMatch) {
+          const [, skimmer, freq, dx, mode, snr, wpm] = spotMatch;
+          
+          const timestamp = Date.now();
+          const freqNum = parseFloat(freq) * 1000; // Convert to Hz
+          const band = freqToBandKHz(freqNum / 1000);
+          
+          spots.push({
+            callsign: skimmer.replace(/-#.*$/, ''), // Skimmer callsign (who heard the signal)
+            skimmerFull: skimmer,
+            dx: dx, // Station being heard
+            frequency: freqNum,
+            freqMHz: parseFloat(freq),
+            band: band,
+            mode: mode,
+            snr: parseInt(snr),
+            wpm: parseInt(wpm),
+            timestamp: new Date().toISOString(),
+            age: 0,
+            source: 'rbn-telnet',
+            grid: null, // RBN doesn't provide grid, but we can look it up client-side
+            line: line.trim()
+          });
+        }
+      }
+    });
+
+    client.on('timeout', () => {
+      console.log(`[RBN] Collection complete: ${spots.length} spots`);
+      client.destroy();
+      resolve(spots);
+    });
+
+    client.on('error', (err) => {
+      console.error(`[RBN] Connection error: ${err.message}`);
+      reject(err);
+    });
+
+    client.on('close', () => {
+      console.log(`[RBN] Connection closed, collected ${spots.length} spots`);
+      resolve(spots);
+    });
+  });
+}
+
 app.get('/api/rbn', async (req, res) => {
   const callsign = (req.query.callsign || '').toUpperCase().trim();
+  const minutes = parseInt(req.query.minutes) || 60;
   const limit = parseInt(req.query.limit) || 100;
+  const port = parseInt(req.query.port) || 7000; // 7000=CW/RTTY, 7001=FT8
   
   if (!callsign || callsign === 'N0CALL') {
     return res.json([]);
   }
   
   const now = Date.now();
-  const cached = rbnCache.get(callsign);
+  const cacheKey = `${callsign}:${port}`;
+  const cached = rbnCache.get(cacheKey);
   
   // Return cached data if fresh
   if (cached && (now - cached.timestamp) < RBN_CACHE_TTL) {
+    console.log(`[RBN] Returning ${cached.data.length} cached spots for ${callsign}`);
     return res.json(cached.data);
   }
   
   try {
-    // Use PSKReporter API for RBN-style spots (CW mode)
-    // This is more reliable than the RBN aggregator
-    // Use senderCallsign to get reports of YOUR signal being heard by others
-    const minutes = parseInt(req.query.minutes) || 60;
-    const flowStartSeconds = -Math.abs(minutes * 60);
-    const url = `https://retrieve.pskreporter.info/query?senderCallsign=${encodeURIComponent(callsign)}&mode=CW&flowStartSeconds=${flowStartSeconds}&rronly=1&nolocator=0&appcontact=openhamclock`;
+    console.log(`[RBN] Connecting to RBN Telnet for real-time spots (${callsign})`);
     
-    console.log(`[RBN] Fetching CW spots for ${callsign} from PSKReporter`);
+    // Collect spots for 10 seconds
+    const allSpots = await fetchRBNSpotsRealtime(callsign, 10, port);
     
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    // Filter spots where the DX (station being heard) matches the user's callsign
+    const userSpots = allSpots.filter(spot => 
+      spot.dx.toUpperCase() === callsign.toUpperCase()
+    );
     
-    const response = await fetch(url, {
-      headers: { 
-        'User-Agent': 'OpenHamClock/3.12 (Amateur Radio Dashboard)',
-        'Accept': 'application/xml, */*'
-      },
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
+    console.log(`[RBN] Collected ${allSpots.length} total spots, ${userSpots.length} for ${callsign}`);
     
-    if (!response.ok) {
-      throw new Error(`PSKReporter API returned ${response.status}`);
-    }
-    
-    const xml = await response.text();
-    const spots = [];
-    
-    // Parse XML response
-    const reportRegex = /<receptionReport[^>]*>/g;
-    let match;
-    
-    while ((match = reportRegex.exec(xml)) !== null) {
-      const report = match[0];
-      
-      // Extract attributes
-      const receiverCallsign = (report.match(/receiverCallsign="([^"]+)"/) || [])[1];
-      const receiverLocator = (report.match(/receiverLocator="([^"]+)"/) || [])[1];
-      const frequency = parseInt((report.match(/frequency="([^"]+)"/) || [])[1] || 0);
-      const snr = parseInt((report.match(/sNR="([^"]+)"/) || [])[1] || 0);
-      const flowStartSeconds = parseInt((report.match(/flowStartSeconds="([^"]+)"/) || [])[1] || 0);
-      const mode = (report.match(/mode="([^"]+)"/) || [])[1] || 'CW';
-      
-      if (receiverCallsign && receiverLocator) {
-        spots.push({
-          callsign: receiverCallsign,
-          grid: receiverLocator,
-          frequency: frequency,  // Already in Hz
-          band: freqToBandKHz(frequency / 1000),  // Convert Hz to kHz
-          snr: snr,
-          mode: mode,
-          timestamp: new Date((flowStartSeconds + 1262304000) * 1000).toISOString(),  // PSKReporter epoch offset
-          wpm: null,
-          continent: null,
-          prefix: null,
-          comment: null
-        });
-      }
-    }
-    
-    console.log(`[RBN] Received ${spots.length} CW spots for ${callsign}`);
-    
-    const limitedSpots = spots.slice(0, limit);
+    const limitedSpots = userSpots.slice(0, limit);
     
     // Cache the results
-    rbnCache.set(callsign, {
+    rbnCache.set(cacheKey, {
       data: limitedSpots,
       timestamp: now
     });
@@ -2356,6 +2392,13 @@ app.get('/api/rbn', async (req, res) => {
     
   } catch (error) {
     console.error('[RBN] Error:', error.message);
+    
+    // Return cached data if available (even if stale)
+    if (cached) {
+      console.log(`[RBN] Returning stale cache for ${callsign}`);
+      return res.json(cached.data);
+    }
+    
     res.json([]);
   }
 });
