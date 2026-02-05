@@ -847,16 +847,34 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
       if (container) {
         clearInterval(retryInterval);
         console.log('[Lightning] Proximity: Container found! Making draggable...');
+        
+        // Default to CENTER of screen (not corner!)
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        container.style.right = 'auto';
+        container.style.bottom = 'auto';
+        container.style.zIndex = '1001'; // Ensure it's on top
+        
+        console.log('[Lightning] Proximity: Panel positioned at center of screen');
+        
+        // Try to load saved position (but validate it's on-screen)
         const saved = localStorage.getItem('lightning-proximity-position');
         if (saved) {
           try {
             const { top, left } = JSON.parse(saved);
-            container.style.position = 'fixed';
-            container.style.top = top + 'px';
-            container.style.left = left + 'px';
-            container.style.right = 'auto';
-            container.style.bottom = 'auto';
-            console.log('[Lightning] Proximity: Applied saved position:', { top, left });
+            // Only apply if position is reasonable (not off-screen)
+            if (top >= 0 && top < window.innerHeight - 100 && 
+                left >= 0 && left < window.innerWidth - 200) {
+              container.style.top = top + 'px';
+              container.style.left = left + 'px';
+              container.style.transform = 'none'; // Remove centering transform
+              console.log('[Lightning] Proximity: Applied saved position:', { top, left });
+            } else {
+              console.log('[Lightning] Proximity: Saved position off-screen, using center');
+              localStorage.removeItem('lightning-proximity-position'); // Clear bad position
+            }
           } catch (e) {
             console.error('[Lightning] Proximity: Error applying saved position:', e);
           }
