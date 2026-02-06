@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import mqtt from 'mqtt';
 
 /**
  * WSPR Propagation Heatmap Plugin v1.5.0
@@ -24,8 +25,8 @@ import { useState, useEffect, useRef } from 'react';
  * - Statistics display (total stations, spots)
  * - Signal strength legend
  * 
- * Data source: PSK Reporter API (WSPR mode spots)
- * Update interval: 5 minutes
+ * Data source: PSK Reporter MQTT (real-time) + HTTP fallback
+ * Update method: Real-time MQTT stream (mqtt.pskreporter.info)
  */
 
 export const metadata = {
@@ -397,47 +398,59 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     }
   }, [locator]);
 
-  useEffect(() => {
-    if (!enabled) return;
+  // MQTT connection for real-time WSPR spots
+  const clientRef = useRef(null);
+  const spotsBufferRef = useRef([]);
+  const httpFallbackRef = useRef(null);
+  const [mqttConnected, setMqttConnected] = useState(false);
+  const [dataSource, setDataSource] = useState('connecting');
 
-    const fetchWSPR = async () => {
+  useEffect(() => {
+    if (!enabled) {
+      // Disconnect MQTT when disabled
+      if (clientRef.current) {
+        console.log('[WSPR MQTT] Disconnecting...');
+        clientRef.current.end();
+        clientRef.current = null;
+      }
+      if (httpFallbackRef.current) {
+        clearInterval(httpFallbackRef.current);
+        httpFallbackRef.current = null;
+      }
+      return;
+    }
+
+    // Clean old spots periodically
+    const cleanOldSpots = () => {
+      const cutoff = Date.now() - (timeWindow * 60 * 1000);
+      spotsBufferRef.current = spotsBufferRef.current.filter(s => s.timestamp > cutoff);
+    };
+
+    // HTTP fallback function
+    const fetchHTTP = async () => {
       try {
+        console.log('[WSPR] Fetching via HTTP fallback...');
         const response = await fetch(`/api/wspr/heatmap?minutes=${timeWindow}&band=${bandFilter}`);
         if (response.ok) {
           const data = await response.json();
           let spots = data.spots || [];
           
-          // Strip suffixes from all callsigns
-          spots = spots.map(spot => {
-            return {
-              ...spot,
-              sender: stripCallsign(spot.sender),
-              receiver: stripCallsign(spot.receiver)
-            };
-          });
+          // Process spots
+          spots = spots.map(spot => ({
+            ...spot,
+            sender: stripCallsign(spot.sender),
+            receiver: stripCallsign(spot.receiver)
+          }));
           
-          // Filter by callsign ONLY if grid filter is OFF
+          // Apply filters
           if (!filterByGrid && callsign && callsign !== 'N0CALL') {
             const baseCall = stripCallsign(callsign);
-            console.log(`[WSPR] Filtering for callsign: ${baseCall} (grid filter OFF)`);
-            
-            spots = spots.filter(spot => {
-              // Show spots where I'm TX or RX
-              const isTX = spot.sender === baseCall;
-              const isRX = spot.receiver === baseCall;
-              return isTX || isRX;
-            });
-            
-            console.log(`[WSPR] Found ${spots.length} spots for ${baseCall} (TX or RX)`);
-          } else if (filterByGrid) {
-            console.log(`[WSPR] Grid filter ON - fetching ALL spots (${spots.length} total)`);
+            spots = spots.filter(spot => spot.sender === baseCall || spot.receiver === baseCall);
           }
           
-          // Convert grid squares to lat/lon if coordinates are missing
+          // Convert grids to lat/lon
           spots = spots.map(spot => {
             let updated = { ...spot };
-            
-            // Convert sender grid to lat/lon if missing
             if ((!spot.senderLat || !spot.senderLon) && spot.senderGrid) {
               const loc = gridToLatLon(spot.senderGrid);
               if (loc) {
@@ -445,8 +458,6 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
                 updated.senderLon = loc.lon;
               }
             }
-            
-            // Convert receiver grid to lat/lon if missing
             if ((!spot.receiverLat || !spot.receiverLon) && spot.receiverGrid) {
               const loc = gridToLatLon(spot.receiverGrid);
               if (loc) {
@@ -454,22 +465,173 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
                 updated.receiverLon = loc.lon;
               }
             }
-            
             return updated;
           });
           
+          spotsBufferRef.current = spots;
           setWsprData(spots);
-          console.log(`[WSPR Plugin] Loaded ${spots.length} spots (${timeWindow}min, band: ${bandFilter})`);
+          setDataSource('http');
+          console.log(`[WSPR HTTP] Loaded ${spots.length} spots`);
         }
       } catch (err) {
-        console.error('WSPR data fetch error:', err);
+        console.error('[WSPR HTTP] Fetch error:', err);
       }
     };
 
-    fetchWSPR();
-    const interval = setInterval(fetchWSPR, 300000);
+    // Try MQTT first
+    console.log('[WSPR MQTT] Connecting to mqtt.pskreporter.info...');
+    
+    // MQTT topic: pskr/filter/v2/{band}/WSPR/{tx}/{rx}/{txgrid}/{rxgrid}/{txcountry}/{rxcountry}
+    // Subscribe to all WSPR spots: pskr/filter/v2/+/WSPR/#
+    const client = mqtt.connect('wss://mqtt.pskreporter.info:1886', {
+      clientId: `ohc_wspr_${Math.random().toString(16).slice(2, 10)}`,
+      clean: true,
+      reconnectPeriod: 5000,
+      connectTimeout: 10000
+    });
 
-    return () => clearInterval(interval);
+    clientRef.current = client;
+    let mqttReady = false;
+
+    client.on('connect', () => {
+      console.log('[WSPR MQTT] Connected! Subscribing to WSPR spots...');
+      setMqttConnected(true);
+      setDataSource('mqtt');
+      mqttReady = true;
+
+      // Clear HTTP fallback if it was running
+      if (httpFallbackRef.current) {
+        clearInterval(httpFallbackRef.current);
+        httpFallbackRef.current = null;
+      }
+
+      // Subscribe to all WSPR spots on all bands
+      const topic = 'pskr/filter/v2/+/WSPR/#';
+      client.subscribe(topic, { qos: 0 }, (err) => {
+        if (err) {
+          console.error('[WSPR MQTT] Subscribe error:', err);
+        } else {
+          console.log(`[WSPR MQTT] Subscribed to ${topic}`);
+        }
+      });
+
+      // Load initial data via HTTP
+      fetchHTTP();
+    });
+
+    client.on('message', (topic, message) => {
+      try {
+        const msg = JSON.parse(message.toString());
+        
+        // MQTT message fields: sc=sender, rc=receiver, sl=sender locator, rl=receiver locator
+        // f=freq (Hz), md=mode, rp=report (SNR), t=timestamp, b=band
+        const spot = {
+          sender: stripCallsign(msg.sc || ''),
+          receiver: stripCallsign(msg.rc || ''),
+          senderGrid: msg.sl || '',
+          receiverGrid: msg.rl || '',
+          freq: msg.f || 0,
+          freqMHz: msg.f ? (msg.f / 1000000).toFixed(6) : null,
+          band: msg.b || getBandFromHz(msg.f),
+          snr: msg.rp !== undefined ? parseInt(msg.rp) : null,
+          timestamp: msg.t ? parseInt(msg.t) * 1000 : Date.now(),
+          age: msg.t ? Math.floor((Date.now() / 1000 - parseInt(msg.t)) / 60) : 0
+        };
+
+        // Convert grids to lat/lon
+        if (spot.senderGrid) {
+          const loc = gridToLatLon(spot.senderGrid);
+          if (loc) {
+            spot.senderLat = loc.lat;
+            spot.senderLon = loc.lon;
+          }
+        }
+        if (spot.receiverGrid) {
+          const loc = gridToLatLon(spot.receiverGrid);
+          if (loc) {
+            spot.receiverLat = loc.lat;
+            spot.receiverLon = loc.lon;
+          }
+        }
+
+        // Apply band filter
+        if (bandFilter !== 'all' && spot.band !== bandFilter) {
+          return;
+        }
+
+        // Apply callsign filter (only when grid filter is OFF)
+        if (!filterByGrid && callsign && callsign !== 'N0CALL') {
+          const baseCall = stripCallsign(callsign);
+          if (spot.sender !== baseCall && spot.receiver !== baseCall) {
+            return;
+          }
+        }
+
+        // Add to buffer
+        spotsBufferRef.current.push(spot);
+        
+        // Keep only recent spots
+        const cutoff = Date.now() - (timeWindow * 60 * 1000);
+        spotsBufferRef.current = spotsBufferRef.current
+          .filter(s => s.timestamp > cutoff)
+          .slice(-10000); // Keep max 10k
+
+        // Update display every 2 seconds to avoid excessive re-renders
+        if (!client._updateTimer) {
+          client._updateTimer = setInterval(() => {
+            if (spotsBufferRef.current.length > 0) {
+              setWsprData([...spotsBufferRef.current]);
+              console.log(`[WSPR MQTT] ${spotsBufferRef.current.length} live spots`);
+            }
+          }, 2000);
+        }
+      } catch (err) {
+        console.error('[WSPR MQTT] Message parse error:', err);
+      }
+    });
+
+    client.on('error', (err) => {
+      console.error('[WSPR MQTT] Connection error:', err);
+      setMqttConnected(false);
+    });
+
+    client.on('close', () => {
+      console.log('[WSPR MQTT] Connection closed');
+      setMqttConnected(false);
+      if (client._updateTimer) {
+        clearInterval(client._updateTimer);
+        client._updateTimer = null;
+      }
+    });
+
+    // Fallback to HTTP after 15 seconds if MQTT doesn't connect
+    const fallbackTimer = setTimeout(() => {
+      if (!mqttReady) {
+        console.log('[WSPR] MQTT connection timeout, using HTTP fallback');
+        setDataSource('http');
+        fetchHTTP();
+        httpFallbackRef.current = setInterval(fetchHTTP, 120000); // Poll every 2 min
+      }
+    }, 15000);
+
+    // Clean old spots every 30 seconds
+    const cleanTimer = setInterval(cleanOldSpots, 30000);
+
+    return () => {
+      clearTimeout(fallbackTimer);
+      clearInterval(cleanTimer);
+      if (client._updateTimer) {
+        clearInterval(client._updateTimer);
+      }
+      if (clientRef.current) {
+        clientRef.current.end();
+        clientRef.current = null;
+      }
+      if (httpFallbackRef.current) {
+        clearInterval(httpFallbackRef.current);
+        httpFallbackRef.current = null;
+      }
+    };
   }, [enabled, bandFilter, timeWindow, callsign, filterByGrid]);
 
   // Create UI controls once (v1.2.0+)
@@ -1143,10 +1305,17 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     setTimeout(() => {
       const statsContainer = document.querySelector('.wspr-stats');
       if (statsContainer && enabled) {
+        const statusIcon = mqttConnected ? '🟢' : '🔴';
+        const statusText = mqttConnected ? 'MQTT Live' : dataSource === 'http' ? 'HTTP Poll' : 'Connecting...';
+        const statusColor = mqttConnected ? 'var(--accent-green)' : dataSource === 'http' ? 'var(--accent-amber)' : 'var(--text-muted)';
+        
         const contentHTML = `
           <div style="margin-bottom: 8px; padding: 6px; background: var(--bg-tertiary); border-radius: 3px;">
             <div style="font-size: 10px; opacity: 0.8; margin-bottom: 2px;">Propagation Score</div>
             <div style="font-size: 18px; font-weight: bold; color: ${scoreColor};">${propScore}/100</div>
+          </div>
+          <div style="margin-bottom: 6px; padding: 4px; background: var(--bg-tertiary); border-radius: 3px; font-size: 10px;">
+            <span style="color: ${statusColor};">${statusIcon} ${statusText}</span>
           </div>
           <div>Paths: <span style="color: var(--accent-cyan);">${newPaths.length}</span></div>
           <div>TX Stations: <span style="color: var(--accent-amber);">${txStations.size}</span></div>
@@ -1226,7 +1395,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         try { map.removeLayer(layer); } catch (e) {}
       });
     };
-  }, [enabled, wsprData, map, pathOpacity, snrThreshold, showAnimation, timeWindow, filterByGrid, gridFilter]);
+  }, [enabled, wsprData, map, pathOpacity, snrThreshold, showAnimation, timeWindow, filterByGrid, gridFilter, mqttConnected, dataSource]);
 
   // Render heatmap overlay (v1.4.0)
   useEffect(() => {
