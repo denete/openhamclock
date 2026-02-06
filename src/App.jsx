@@ -31,8 +31,7 @@ import { resetLayout } from './store/layoutStore.js';
 import {
   useSpaceWeather,
   useBandConditions,
-  useDXCluster,
-  useDXPaths,
+  useDXClusterData,
   usePOTASpots,
   useContests,
   useWeather,
@@ -263,8 +262,7 @@ const App = () => {
     } catch (e) {}
   }, [pskFilters]);
   
-  const dxCluster = useDXCluster(config.dxClusterSource || 'auto', dxFilters);
-  const dxPaths = useDXPaths();
+  const dxClusterData = useDXClusterData(dxFilters);
   const dxpeditions = useDXpeditions();
   const contests = useContests();
   const propagation = usePropagation(config.location, dxLocation);
@@ -406,8 +404,7 @@ const App = () => {
           solarIndices={solarIndices}
           bandConditions={bandConditions}
           propagation={propagation}
-          dxCluster={dxCluster}
-          dxPaths={dxPaths}
+          dxClusterData={dxClusterData}
           potaSpots={potaSpots}
           mySpots={mySpots}
           dxpeditions={dxpeditions}
@@ -574,7 +571,7 @@ const App = () => {
                     <div key={b.band} style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: b.color }}>{b.band}</span>
                       <span style={{ color: '#fff' }}>
-                        {dxCluster.data?.filter(s => {
+                        {dxClusterData.spots?.filter(s => {
                           const freq = parseFloat(s.freq);
                           const bands = {
                             '160m': [1.8, 2], '80m': [3.5, 4], '60m': [5.3, 5.4], '40m': [7, 7.3],
@@ -621,7 +618,7 @@ const App = () => {
                 <span style={{ color: '#00ff00', fontSize: '10px' }}>dxspider.co.uk:7300</span>
               </div>
               <div style={{ flex: 1, overflow: 'auto', fontSize: '11px' }}>
-                {dxCluster.data?.slice(0, 25).map((spot, i) => (
+                {dxClusterData.spots?.slice(0, 25).map((spot, i) => (
                   <div 
                     key={i} 
                     style={{ 
@@ -652,7 +649,7 @@ const App = () => {
                 onDXChange={handleDXChange}
                 potaSpots={potaSpots.data}
                 mySpots={mySpots.data}
-                dxPaths={dxPaths.data}
+                dxPaths={dxClusterData.paths}
                 dxFilters={dxFilters}
                 satellites={satellites.data}
                 pskReporterSpots={filteredPskSpots}
@@ -843,7 +840,7 @@ const App = () => {
                 onDXChange={handleDXChange}
                 potaSpots={potaSpots.data}
                 mySpots={mySpots.data}
-                dxPaths={dxPaths.data}
+                dxPaths={dxClusterData.paths}
                 dxFilters={dxFilters}
                 satellites={satellites.data}
                 pskReporterSpots={filteredPskSpots}
@@ -943,10 +940,10 @@ const App = () => {
               <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '14px', color: 'var(--accent-red)', fontWeight: '700', textTransform: 'uppercase' }}>DX Cluster</span>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{dxCluster.data?.length || 0} spots</span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{dxClusterData.spots?.length || 0} spots</span>
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto' }}>
-                  {dxCluster.data?.slice(0, 30).map((spot, i) => (
+                  {dxClusterData.spots?.slice(0, 30).map((spot, i) => (
                     <div
                       key={i}
                       style={{
@@ -1159,7 +1156,7 @@ const App = () => {
                 onDXChange={handleDXChange}
                 potaSpots={potaSpots.data}
                 mySpots={mySpots.data}
-                dxPaths={dxPaths.data}
+                dxPaths={dxClusterData.paths}
                 dxFilters={dxFilters}
                 satellites={satellites.data}
                 pskReporterSpots={filteredPskSpots}
@@ -1236,10 +1233,10 @@ const App = () => {
             }}>
               <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '14px', color: 'var(--accent-red)', fontWeight: '700', textTransform: 'uppercase' }}>DX Cluster</span>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{dxCluster.data?.length || 0}</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{dxClusterData.spots?.length || 0}</span>
               </div>
               <div style={{ flex: 1, overflowY: 'auto' }}>
-                {dxCluster.data?.slice(0, 40).map((spot, i) => (
+                {dxClusterData.spots?.slice(0, 40).map((spot, i) => (
                   <div
                     key={i}
                     style={{
@@ -1393,7 +1390,7 @@ const App = () => {
             onDXChange={handleDXChange}
             potaSpots={potaSpots.data}
             mySpots={mySpots.data}
-            dxPaths={dxPaths.data}
+            dxPaths={dxClusterData.paths}
             dxFilters={dxFilters}
             satellites={satellites.data}
             pskReporterSpots={filteredPskSpots}
@@ -1431,9 +1428,9 @@ const App = () => {
             {config.panels?.dxCluster?.visible !== false && (
               <div style={{ flex: `${config.panels.dxCluster.size || 2} 1 auto`, minHeight: '180px', overflow: 'hidden' }}>
                 <DXClusterPanel
-                data={dxCluster.data}
-                loading={dxCluster.loading}
-                totalSpots={dxCluster.totalSpots}
+                data={dxClusterData.spots}
+                loading={dxClusterData.loading}
+                totalSpots={dxClusterData.totalSpots}
                 filters={dxFilters}
                 onFilterChange={setDxFilters}
                 onOpenFilters={() => setShowDXFilters(true)}

@@ -57,8 +57,7 @@ export const DockableApp = ({
   propagation,
 
   // Spots & data
-  dxCluster,
-  dxPaths,
+  dxClusterData,
   potaSpots,
   mySpots,
   dxpeditions,
@@ -201,7 +200,7 @@ export const DockableApp = ({
         onDXChange={handleDXChange}
         potaSpots={potaSpots.data}
         mySpots={mySpots.data}
-        dxPaths={dxPaths.data}
+        dxPaths={dxClusterData.paths}
         dxFilters={dxFilters}
         satellites={satellites.data}
         pskReporterSpots={filteredPskSpots}
@@ -248,9 +247,9 @@ export const DockableApp = ({
       case 'dx-cluster':
         return (
           <DXClusterPanel
-            data={dxCluster.data}
-            loading={dxCluster.loading}
-            totalSpots={dxCluster.totalSpots}
+            data={dxClusterData.spots}
+            loading={dxClusterData.loading}
+            totalSpots={dxClusterData.totalSpots}
             filters={dxFilters}
             onFilterChange={setDxFilters}
             onOpenFilters={() => setShowDXFilters(true)}
@@ -305,8 +304,8 @@ export const DockableApp = ({
     }
   }, [
     config, deGrid, dxGrid, dxLocation, deSunTimes, dxSunTimes, showDxWeather, tempUnit, solarIndices,
-    propagation, bandConditions, dxCluster, dxFilters, hoveredSpot, mapLayers, potaSpots,
-    mySpots, dxPaths, satellites, filteredPskSpots, wsjtxMapSpots, dxpeditions, contests,
+    propagation, bandConditions, dxClusterData, dxFilters, hoveredSpot, mapLayers, potaSpots,
+    mySpots, satellites, filteredPskSpots, wsjtxMapSpots, dxpeditions, contests,
     pskFilters, wsjtx, handleDXChange, setDxFilters, setShowDXFilters, setShowPSKFilters,
     setHoveredSpot, toggleDXPaths, toggleDXLabels, togglePOTA, toggleSatellites, togglePSKReporter, toggleWSJTX
   ]);
