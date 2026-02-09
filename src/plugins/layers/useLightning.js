@@ -65,28 +65,30 @@ function getStrikeColor(ageMinutes) {
 }
 
 // Make control draggable with CTRL+drag
-function makeDraggable(element, storageKey) {
+function makeDraggable(element, storageKey, skipPositionLoad = false) {
   if (!element) return;
   
-  // Load saved position
-  const saved = localStorage.getItem(storageKey);
-  if (saved) {
-    try {
-      const { top, left } = JSON.parse(saved);
+  // Load saved position only if not already loaded
+  if (!skipPositionLoad) {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        const { top, left } = JSON.parse(saved);
+        element.style.position = 'fixed';
+        element.style.top = top + 'px';
+        element.style.left = left + 'px';
+        element.style.right = 'auto';
+        element.style.bottom = 'auto';
+      } catch (e) {}
+    } else {
+      // Convert from Leaflet control position to fixed
+      const rect = element.getBoundingClientRect();
       element.style.position = 'fixed';
-      element.style.top = top + 'px';
-      element.style.left = left + 'px';
+      element.style.top = rect.top + 'px';
+      element.style.left = rect.left + 'px';
       element.style.right = 'auto';
       element.style.bottom = 'auto';
-    } catch (e) {}
-  } else {
-    // Convert from Leaflet control position to fixed
-    const rect = element.getBoundingClientRect();
-    element.style.position = 'fixed';
-    element.style.top = rect.top + 'px';
-    element.style.left = rect.left + 'px';
-    element.style.right = 'auto';
-    element.style.bottom = 'auto';
+    }
   }
   
   element.title = 'Hold CTRL and drag to reposition';
@@ -904,6 +906,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null, lowMemory
         
         // Try to load saved position (but validate it's on-screen)
         const saved = localStorage.getItem('lightning-proximity-position');
+        let positionLoaded = false;
         if (saved) {
           try {
             const { top, left } = JSON.parse(saved);
@@ -913,6 +916,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null, lowMemory
               container.style.top = top + 'px';
               container.style.left = left + 'px';
               container.style.transform = 'none'; // Remove centering transform
+              positionLoaded = true;
               console.log('[Lightning] Proximity: Applied saved position:', { top, left });
             } else {
               console.log('[Lightning] Proximity: Saved position off-screen, using center');
@@ -923,7 +927,8 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null, lowMemory
           }
         }
         
-        makeDraggable(container, 'lightning-proximity-position');
+        // Make draggable - pass flag to skip position loading since we already did it
+        makeDraggable(container, 'lightning-proximity-position', positionLoaded);
         addMinimizeToggle(container, 'lightning-proximity-position');
         console.log('[Lightning] Proximity: Panel is now draggable and minimizable');
         

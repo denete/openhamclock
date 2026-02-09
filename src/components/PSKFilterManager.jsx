@@ -5,7 +5,15 @@
 import React, { useState } from 'react';
 
 const BANDS = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m', '2m', '70cm'];
-const MODES = ['FT8', 'FT4', 'JS8', 'WSPR', 'JT65', 'JT9', 'MSK144', 'Q65', 'FST4', 'FST4W'];
+const MODES = [
+  'FT8', 'VARAC', 'FT4', 'CW', 'JS8', 'FREEDV', 'WSPR', 'JT65', 'JT', 'MSK144', 
+  'FST4W', 'FSQ', 'FST4', 'Q65', 'RTTY', 'OPERA', 'CONTESTI', 'OLIVIA 8', 'PSK', 
+  'PSK31', 'Q65B', 'OLIVIA 4', 'ROS', 'PSK32', 'SIM31', 'OLIVIA 1', 'SSTV', 'SSB', 
+  'Q65D', 'JT9', 'PI4', 'ECHO', 'DOMINO', 'JT4', 'FSK441', 'HELL', 'MFSK32', 
+  'RTTY 45', 'Q65-30A', 'OLIVIA', 'THOR32', 'PSK63', 'THOR22', 'OLIVIA 3', 'JT65B', 
+  'PKT', 'THOR11', 'Q65A', 'MFSK16', 'POCSAG', 'CWU', 'THRB', 'NULL', 'FST4W-90', 
+  'THOR-M', 'DFCW-90', 'SIM63', 'MFSK22', 'HFDL', 'JTMS', 'LZ3CB', '-FT8'
+];
 
 // Common grid field prefixes by region
 const GRID_REGIONS = [
