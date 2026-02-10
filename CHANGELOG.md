@@ -31,9 +31,10 @@ All notable changes to OpenHamClock will be documented in this file.
 
 ### Changed
 - **WSJT-X decode limits** — Server buffer: 200 → 500 decodes. Max age: 30 → 60 minutes. Client ring buffer: 200 → 500. These are the raw limits; the new retention dropdown (5m/15m/30m/60m) controls what the user actually sees
+- **Open-Meteo backoff cap** — Exponential backoff for Open-Meteo was capping at 30 minutes, creating a death spiral: worker tried one cell every 30 min, failed, reset the 30-min timer, consecutive failures climbed to 26+. Now capped at 5 minutes max. Weather worker uses a probe-then-batch strategy: tries a single international cell after backoff expires, only processes remaining cells if the probe succeeds. One success resets backoff entirely. Recovery time: 30+ min → ~5 min
 - **Weather cache TTL** — Server: 30 min → 2 hours. Client poll: 30 min → 2 hours. Stale TTL: 2 hr → 6 hr. Background worker pre-refreshes cache 5 min before expiry so clients always get fresh data. Open-Meteo usage dominated by unique active grid cells, not user count — 2000 users ≈ 300 cells × 12 refreshes/day = ~3,600 req/day (well under 10K limit)
 - **WSPR client polling** — 2 min → 5 min (server caches for 10 min anyway)
-- **PSKReporter/Weather backoff** — Replaced fixed-duration backoff (15 min / 1 hr) with exponential backoff: 30s → 60s → 120s → ... capped at 30 min, with 0-15s random jitter to prevent synchronized retry storms
+- **PSKReporter/Weather backoff** — Replaced fixed-duration backoff (15 min / 1 hr) with exponential backoff: 30s → 60s → 120s → ... capped per service (Open-Meteo: 5 min, PSKReporter: 30 min), with 0-15s random jitter to prevent synchronized retry storms
 
 ## [15.1.1] - 2026-02-09
 

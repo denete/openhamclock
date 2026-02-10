@@ -98,7 +98,7 @@ class UpstreamManager {
 
   /**
    * Record a failure — applies exponential backoff with jitter
-   * @param {string} service - Service name (e.g. 'pskreporter', 'wspr', 'weather')
+   * @param {string} service - Service name (e.g. 'pskreporter', 'openmeteo')
    * @param {number} statusCode - HTTP status that caused the failure
    */
   recordFailure(service, statusCode) {
@@ -108,8 +108,11 @@ class UpstreamManager {
     // Base delays by status: 429=aggressive, 503=moderate, other=short
     const baseDelay = statusCode === 429 ? 60000 : statusCode === 503 ? 30000 : 15000;
     
-    // Exponential: 30s, 60s, 120s, 240s... capped at 30 minutes
-    const delay = Math.min(30 * 60 * 1000, baseDelay * Math.pow(2, consecutive - 1));
+    // Per-service max backoff caps (weather needs to recover quickly for 2000+ users)
+    const maxBackoff = service === 'openmeteo' ? 5 * 60 * 1000 : 30 * 60 * 1000;
+    
+    // Exponential: base * 2^(n-1), capped per service
+    const delay = Math.min(maxBackoff, baseDelay * Math.pow(2, Math.min(consecutive - 1, 8)));
     
     // Add 0-15s jitter to prevent synchronized retries across instances
     const jitter = Math.random() * 15000;
@@ -7357,23 +7360,55 @@ async function runWeatherWorkerCycle() {
 
   let refreshed = 0, failed = 0;
 
-  for (const cell of needsRefresh) {
+  // If Open-Meteo was recently backed off, probe with a single international cell first
+  // to verify it's recovered before trying all cells
+  const intlCells = needsRefresh.filter(c => !isUSCoordinates(c.lat, c.lon));
+  const usCells = needsRefresh.filter(c => isUSCoordinates(c.lat, c.lon));
+  let openMeteoAvailable = !upstream.isBackedOff('openmeteo');
+
+  if (!openMeteoAvailable && intlCells.length > 0) {
+    // Still backed off — skip all international cells this cycle
+    logDebug(`[Weather Worker] Open-Meteo backed off (${upstream.backoffRemaining('openmeteo')}s remaining), skipping ${intlCells.length} intl cells`);
+  }
+
+  // Process US cells first (NWS — fast, unlimited)
+  for (const cell of usCells) {
     try {
       await refreshWeatherCell(cell.lat, cell.lon);
       refreshed++;
     } catch (err) {
       failed++;
-      // If Open-Meteo is backed off, stop processing international cells
-      if (upstream.isBackedOff('openmeteo') && !isUSCoordinates(cell.lat, cell.lon)) {
-        logDebug(`[Weather Worker] Open-Meteo backed off, skipping remaining international cells`);
-        break;
+    }
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  // Process international cells only if Open-Meteo is not backed off
+  if (openMeteoAvailable && intlCells.length > 0) {
+    // Probe first cell to verify Open-Meteo is responsive
+    try {
+      await refreshWeatherCell(intlCells[0].lat, intlCells[0].lon);
+      refreshed++;
+    } catch (err) {
+      failed++;
+      if (upstream.isBackedOff('openmeteo')) {
+        logDebug(`[Weather Worker] Open-Meteo probe failed, skipping remaining ${intlCells.length - 1} intl cells`);
+        intlCells.length = 1; // Don't process more
       }
     }
 
-    // Small delay between US/NWS requests to be polite (100ms)
-    // Open-Meteo requests are already throttled by the queue at 4/s
-    if (isUSCoordinates(cell.lat, cell.lon)) {
-      await new Promise(r => setTimeout(r, 100));
+    // Process remaining international cells
+    for (let i = 1; i < intlCells.length; i++) {
+      if (upstream.isBackedOff('openmeteo')) {
+        logDebug(`[Weather Worker] Open-Meteo backed off mid-cycle, skipping remaining ${intlCells.length - i} intl cells`);
+        break;
+      }
+      try {
+        await refreshWeatherCell(intlCells[i].lat, intlCells[i].lon);
+        refreshed++;
+      } catch (err) {
+        failed++;
+        if (upstream.isBackedOff('openmeteo')) break;
+      }
     }
   }
 
