@@ -296,15 +296,16 @@ export default function ClassicLayout(props) {
             onClick={() => setShowSettings(true)}
             style={{
               position: 'absolute',
-              top: '10px',
-              left: '10px',
+              top: '43px',
+              left: '50px',
               background: 'rgba(0,0,0,0.7)',
               border: '1px solid #444',
               color: '#fff',
               padding: '6px 12px',
               fontSize: '12px',
               cursor: 'pointer',
-              borderRadius: '4px'
+              borderRadius: '4px',
+              zIndex: 1000
             }}
           >
             {t('app.settings')}
@@ -316,15 +317,16 @@ export default function ClassicLayout(props) {
             title={dxLocked ? t('app.dxLock.unlockTooltip') : t('app.dxLock.lockTooltip')}
             style={{
               position: 'absolute',
-              top: '10px',
-              left: '110px',
+              top: '43px',
+              left: '145px',
               background: dxLocked ? 'rgba(255,180,0,0.9)' : 'rgba(0,0,0,0.7)',
               border: '1px solid #444',
               color: dxLocked ? '#000' : '#fff',
               padding: '6px 12px',
               fontSize: '12px',
               cursor: 'pointer',
-              borderRadius: '4px'
+              borderRadius: '4px',
+              zIndex: 1000
             }}
           >
             {dxLocked ? t('app.dxLock.locked') : t('app.dxLock.unlocked')}
@@ -536,8 +538,8 @@ export default function ClassicLayout(props) {
             title={dxLocked ? t('app.dxLock.unlockTooltip') : t('app.dxLock.lockTooltip')}
             style={{
               position: 'absolute',
-              top: '10px',
-              left: '10px',
+              top: '43px',
+              left: '50px',
               background: dxLocked ? 'rgba(255,180,0,0.9)' : 'rgba(0,0,0,0.7)',
               border: '1px solid #444',
               color: dxLocked ? '#000' : '#fff',
