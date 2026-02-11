@@ -169,15 +169,6 @@ export const DXClusterPanel = ({
                 onMouseLeave={() => onHoverSpot?.(null)}
                 onClick={() => {
                   onSpotClick?.(spot);
-                  if (spot.freq) {
-                    const freqVal = parseFloat(spot.freq);
-                    let freqHz = freqVal;
-                    if (freqVal < 1000) freqHz = freqVal * 1000000;
-                    else if (freqVal < 100000) freqHz = freqVal * 1000;
-
-                    const mode = spot.mode || detectMode(spot.comment || spot.spotter || '');
-                    tuneTo(freqHz, mode);
-                  }
                 }}
                 style={{
                   display: 'grid',
