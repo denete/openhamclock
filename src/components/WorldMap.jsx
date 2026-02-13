@@ -189,15 +189,6 @@ export const WorldMap = ({
 		crossOrigin: 'anonymous'
 	  }).addTo(map);
 
-	   // Add the Night Layer with your preferred brightness (nightIntensity)
-	  //nightTileLayerRef.current = L.tileLayer(nightUrl, {
-		//attribution: 'NASA GIBS',
-		//noWrap: false,
-		//pane: 'nightPane',
-		//opacity: nightIntensity, // This applies your saved or default brightness
-		//zIndex: 1
-	  // //}).addTo(map); 
-
 	  // Day/night terminator
 	  terminatorRef.current = createTerminator({
 		resolution: 2,
@@ -205,7 +196,8 @@ export const WorldMap = ({
 		fillColor: '#000010',
 		color: '#ffaa00',
 		weight: 2,
-		dashArray: '5, 5'
+		dashArray: '5, 5',
+		wrap: false
 	  }).addTo(map);
 
 	  // Refresh terminator immediately to set initial position
@@ -273,7 +265,6 @@ export const WorldMap = ({
     if (mapStyle === 'MODIS') { url = getGibsUrl(gibsOffset); }
     tileLayerRef.current.setUrl(url);
 
-    // --- THE FIX: Forces Leaflet to re-validate tiles immediately ---
     // This clears the "map data not yet available" placeholders
     map.invalidateSize({ animate: false }); 
     tileLayerRef.current.redraw(); // Optional: forces a fresh download of the tiles
@@ -283,12 +274,12 @@ export const WorldMap = ({
     tileLayerRef.current.setZIndex(10);
 
 
-    // 3. Terminator Shadow (Gray Line)
+    // 3. Terminator Shadow (Gray Line) Set Color to transparent to hide terminator verticle lines at 180° and -180° -limited fix though
     if (terminatorRef.current) {
         terminatorRef.current.setStyle({
             fillOpacity: 0.6, 
             fillColor: '#000008',
-            color: '#ffaa00',
+            color: 'transparent',
             weight: 2
         });
         
