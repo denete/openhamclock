@@ -9,7 +9,7 @@ export const metadata = {
   description: 'NASA VIIRS City Lights visualization for nighttime areas',
   icon: '🗺️',
   category: 'overlay',
-  defaultEnabled: true,
+  defaultEnabled: false,
   defaultOpacity: 0.8,
 };
 

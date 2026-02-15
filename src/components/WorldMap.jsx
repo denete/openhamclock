@@ -150,7 +150,7 @@ export const WorldMap = ({
   // Initialize map
   useEffect(() => {
 	// If map is already initialized, don't do it again
-	  if (mapInstanceRef.current) return;
+	  if (!mapRef.current || mapInstanceRef.current) return;
 	  
 	  const L = window.L;
 	  if (typeof L === 'undefined') {
@@ -255,23 +255,26 @@ export const WorldMap = ({
 
   useEffect(() => {
     if (!mapInstanceRef.current || !tileLayerRef.current) return;
-    const map = mapInstanceRef.current; // Define map reference
+    const map = mapInstanceRef.current;
     
-    // 1. Base Map (Day)
+    // Remove old tile layer completely — setUrl() doesn't flush the tile cache,
+    // leaving stale "Map data not yet available" tiles visible until zoom/pan.
+    map.removeLayer(tileLayerRef.current);
+
+    // Determine the URL: Use the dynamic GIBS generator if 'MODIS' is selected
     let url = MAP_STYLES[mapStyle].url;
     if (mapStyle === 'MODIS') { url = getGibsUrl(gibsOffset); }
-    tileLayerRef.current.setUrl(url);
 
-    // This clears the "map data not yet available" placeholders
-    map.invalidateSize({ animate: false }); 
-    tileLayerRef.current.redraw(); // Optional: forces a fresh download of the tiles
-    // ----------------------------------------------------------------
+    // Create fresh tile layer with correct attribution and options
+    tileLayerRef.current = L.tileLayer(url, {
+      attribution: MAP_STYLES[mapStyle].attribution,
+      noWrap: false,
+      crossOrigin: 'anonymous',
+      // NASA GIBS tiles only cover -180..180; other tile providers wrap naturally
+      ...(mapStyle === 'MODIS' ? { bounds: [[-85, -180], [85, 180]] } : {})
+    }).addTo(map);
 
-    tileLayerRef.current.setOpacity(1.0);
-    tileLayerRef.current.setZIndex(10);
-
-
-    // 3. Terminator Shadow (Gray Line) Set Color to transparent to hide terminator verticle lines at 180° and -180° -limited fix though
+    // 3. Terminator Shadow (Gray Line) Set Color to transparent to hide terminator vertical lines at 180° and -180°
     if (terminatorRef.current) {
         terminatorRef.current.setStyle({
             fillOpacity: 0.6, 
@@ -283,6 +286,11 @@ export const WorldMap = ({
         if (typeof terminatorRef.current.bringToFront === 'function') {
             terminatorRef.current.bringToFront();
         }
+    }
+    
+    // If you have a countries overlay, ensure it stays visible
+    if (countriesLayerRef.current) {
+      countriesLayerRef.current.bringToFront();
     }
 
     // 4. Handle Clipping Mask
@@ -303,7 +311,7 @@ export const WorldMap = ({
     const maskInterval = setInterval(updateMask, 3000); 
 
     return () => clearInterval(maskInterval);
-}, [mapStyle, gibsOffset]); // Added gibsOffset  and night slider so the map refreshes when you move the slider
+}, [mapStyle, gibsOffset]);
   
   // End code dynamic GIBS generator if 'MODIS' is selected
 
@@ -945,7 +953,7 @@ export const WorldMap = ({
           style={{
             position: 'absolute',
             top: '10px',
-            left: '145px',
+            left: '50px',
             background: showDXLabels ? 'rgba(255, 170, 0, 0.2)' : 'rgba(0, 0, 0, 0.8)',
             border: `1px solid ${showDXLabels ? '#ffaa00' : '#666'}`,
             color: showDXLabels ? '#ffaa00' : '#888',
