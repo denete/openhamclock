@@ -179,6 +179,17 @@ export const RigProvider = ({ children, rigConfig }) => {
 
       if (!freqInput) return;
 
+      // Handle spot object (recursive call)
+      if (typeof freqInput === 'object' && freqInput !== null) {
+        const spot = freqInput;
+        const f = spot.freq || spot.freqMHz;
+        const m = spot.mode || modeInput;
+        if (f) {
+          tuneTo(f, m);
+        }
+        return;
+      }
+
       let hz = 0;
       // Handle number
       if (typeof freqInput === "number") {

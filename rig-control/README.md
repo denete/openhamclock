@@ -108,3 +108,7 @@ The daemon listens on port `5555` (configurable) and provides the following endp
 - **Check Connection**: Ensure `rigctld` or `flrig` is running and accessible.
 - **CORS Errors**: The daemon enables CORS for all origins by default (`*`) to allow local development.
 - **Port Conflicts**: If port 5555 is in use, change `server.port` in `rig-config.json`.
+
+## Experimental Scripts
+
+The `scripts/` folder contains experimental installation and utility scripts. These are currently **in testing** and may not function properly on all systems. Use them with caution.

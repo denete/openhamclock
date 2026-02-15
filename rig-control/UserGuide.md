@@ -5,7 +5,8 @@ This guide will help you set up Rig Control for OpenHamClock so you can control 
 This feature allows you to:
 
 - **See your radio's frequency** on the dashboard.
-- **Click spots** on the map or cluster to instantly tune your radio.
+- **Click spots** on the map, DX cluster, or POTA/SOTA lists to instantly tune your radio.
+- **Works in ALL Layouts**: Classic, Tablet, Compact, and Modern.
 - **Trigger PTT** directly from the web interface.
 
 ---
@@ -143,7 +144,13 @@ node rig-daemon.js
 
 ## ✅ You're Done!
 
-Navigate to the dashboard. You should see the Rig Control panel. Clicking spots on the map/cluster should now tune your radio!
+Navigate to the dashboard. You should see the Rig Control panel (if enabled). 
+
+**Try it out:**
+- Click a spot on the **World Map**.
+- Click a row in the **DX Cluster** list.
+- Click a **POTA** or **SOTA** spot.
+- Works across **Classic**, **Modern**, **Tablet**, and **Compact** layouts!
 
 ### Troubleshooting
 
