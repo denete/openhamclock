@@ -222,5 +222,6 @@
   "station.settings.satellites.visible": "✓ Vis?vel",
   "station.settings.satellites.belowHorizon": "✗ Abaixo do horizonte",
   "app.legend.sun": "Sun",
-  "app.legend.moon": "Moon"
+  "app.legend.moon": "Moon",
+  "station.settings.satellites.belowHorizon": "✗ Abaixo do horizonte"
 }

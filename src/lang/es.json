@@ -367,5 +367,6 @@
   "propagation.heatmap.tooltip.voacap": "Cambiar a colores de mapa de calor VOACAP (rojo=bueno)",
   "propagation.heatmap.tooltip.stoplight": "Cambiar a colores de semáforo (verde=bueno)",
   "app.legend.sun": "Sun",
-  "app.legend.moon": "Moon"
+  "app.legend.moon": "Moon",
+  "propagation.heatmap.tooltip.stoplight": "Cambiar a colores de semáforo (verde=bueno)"
 }

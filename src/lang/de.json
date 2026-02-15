@@ -223,5 +223,6 @@
   "station.settings.satellites.visible": "✓ Sichtbar",
   "station.settings.satellites.belowHorizon": "✗ Unter dem Horizont",
   "app.legend.sun": "Sonne",
-  "app.legend.moon": "Mond"
+  "app.legend.moon": "Mond",
+  "station.settings.satellites.belowHorizon": "✗ Unter dem Horizont"
 }

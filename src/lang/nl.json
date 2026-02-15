@@ -223,5 +223,6 @@
   "station.settings.satellites.visible": "✓ Zichtbaar",
   "station.settings.satellites.belowHorizon": "✗ Onder de horizon",
   "app.legend.sun": "Sun",
-  "app.legend.moon": "Moon"
+  "app.legend.moon": "Moon",
+  "station.settings.satellites.belowHorizon": "✗ Onder de horizon"
 }
