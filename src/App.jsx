@@ -12,6 +12,7 @@ import ClassicLayout from './layouts/ClassicLayout.jsx';
 import ModernLayout from './layouts/ModernLayout.jsx';
 
 import { resetLayout } from './store/layoutStore.js';
+import { RigProvider } from './contexts/RigContext.jsx';
 
 import {
   useSpaceWeather,
@@ -41,6 +42,7 @@ import useFullscreen from './hooks/app/useFullscreen';
 import useResponsiveScale from './hooks/app/useResponsiveScale';
 import useLocalInstall from './hooks/app/useLocalInstall';
 import useVersionCheck from './hooks/app/useVersionCheck';
+import WhatsNew from './components/WhatsNew.jsx';
 
 const App = () => {
   const { t } = useTranslation();
@@ -321,18 +323,20 @@ const App = () => {
       alignItems: 'center',
       overflow: 'hidden'
     }}>
-      {config.layout === 'dockable' ? (
-        <DockableLayout
-          key={layoutResetKey}
-          {...layoutProps}
-        />
-      ) : (config.layout === 'classic' || config.layout === 'tablet' || config.layout === 'compact') ? (
-        <ClassicLayout {...layoutProps} />
-      ) : (
-        <ModernLayout
-          {...layoutProps}
-        />
-      )}
+      <RigProvider rigConfig={config.rigControl || { enabled: false, host: 'http://localhost', port: 5555 }}>
+        {config.layout === 'dockable' ? (
+          <DockableLayout
+            key={layoutResetKey}
+            {...layoutProps}
+          />
+        ) : (config.layout === 'classic' || config.layout === 'tablet' || config.layout === 'compact') ? (
+          <ClassicLayout {...layoutProps} />
+        ) : (
+          <ModernLayout
+            {...layoutProps}
+          />
+        )}
+      </RigProvider>
 
       {/* Modals */}
       <SettingsPanel
@@ -359,6 +363,7 @@ const App = () => {
         isOpen={showPSKFilters}
         onClose={() => setShowPSKFilters(false)}
       />
+      <WhatsNew />
     </div>
   );
 };

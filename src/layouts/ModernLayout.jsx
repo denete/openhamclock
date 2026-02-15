@@ -14,6 +14,7 @@ import {
   WeatherPanel,
   AnalogClockPanel
 } from '../components';
+import { useRig } from '../contexts/RigContext.jsx';
 
 export default function ModernLayout(props) {
   const {
@@ -84,6 +85,8 @@ export default function ModernLayout(props) {
     setHoveredSpot,
     filteredSatellites,
   } = props;
+
+  const { tuneTo } = useRig();
 
   return (
     <div style={{
@@ -302,6 +305,7 @@ export default function ModernLayout(props) {
           lowMemoryMode={config.lowMemoryMode}
           units={config.units}
           mouseZoom={config.mouseZoom}
+          onSpotClick={tuneTo}
         />
         <div style={{
           position: 'absolute',
@@ -333,6 +337,7 @@ export default function ModernLayout(props) {
                 onOpenFilters={() => setShowDXFilters(true)}
                 onHoverSpot={setHoveredSpot}
                 onSpotClick={(spot) => {
+                  tuneTo(spot);
                   const path = (dxClusterData.paths || []).find(p => p.dxCall === spot.call);
                   if (path && path.dxLat != null && path.dxLon != null) {
                     handleDXChange({ lat: path.dxLat, lon: path.dxLon });
