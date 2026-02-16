@@ -561,10 +561,11 @@ export const DockableApp = ({
 
             showLabelsOnMap={mapLayersEff.showPOTALabels}
             onToggleLabelsOnMap={togglePOTALabelsEff}
+            onSpotClick={handleSpotClick}
           />
         );
         break;
-      
+
       case 'wwff':
         content = (
           <WWFFPanel
@@ -575,6 +576,7 @@ export const DockableApp = ({
 
             showLabelsOnMap={mapLayersEff.showWWFFLabels}
             onToggleLabelsOnMap={toggleWWFFLabelsEff}
+            onSpotClick={handleSpotClick}
           />
         );
         break;
