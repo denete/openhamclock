@@ -11,6 +11,7 @@ export const useSOTASpots = () => {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [lastChecked, setLastChecked] = useState(null);
+  const lastNewestSpotRef = useRef(null);
   const fetchRef = useRef(null);
 
   useEffect(() => {
@@ -20,7 +21,17 @@ export const useSOTASpots = () => {
         if (res?.ok) {
           const spots = await res.json();
           console.log(`[SOTA] Fetched ${Array.isArray(spots) ? spots.length : 0} spots`);
-          setLastUpdated(Date.now());
+          
+          // Only mark as "updated" when data content actually changes
+          let newestTime = null;
+          if (Array.isArray(spots) && spots.length > 0) {
+            const times = spots.map(s => s.timeStamp).filter(Boolean).sort().reverse();
+            newestTime = times[0] || null;
+          }
+          if (newestTime !== lastNewestSpotRef.current || lastNewestSpotRef.current === null) {
+            lastNewestSpotRef.current = newestTime;
+            setLastUpdated(Date.now());
+          }
 
           // Map SOTA API response to our standard spot format
           const mapped = (Array.isArray(spots) ? spots : [])

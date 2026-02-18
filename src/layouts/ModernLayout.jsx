@@ -412,14 +412,17 @@ export default function ModernLayout(props) {
               <PotaSotaPanel
                 potaData={potaSpots.data}
                 potaLoading={potaSpots.loading}
+                potaLastUpdated={potaSpots.lastUpdated}
                 showPOTA={mapLayers.showPOTA}
                 onTogglePOTA={togglePOTA}
                 sotaData={sotaSpots.data}
                 sotaLoading={sotaSpots.loading}
+                sotaLastUpdated={sotaSpots.lastUpdated}
                 showSOTA={mapLayers.showSOTA}
                 onToggleSOTA={toggleSOTA}
                 wwffData={wwffSpots.data}
                 wwffLoading={wwffSpots.loading}
+                wwffLastUpdated={wwffSpots.lastUpdated}
                 showWWFF={mapLayers.showWWFF}
                 onToggleWWFF={toggleWWFF}
                 onPOTASpotClick={handleParkSpotClick}

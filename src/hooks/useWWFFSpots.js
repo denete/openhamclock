@@ -11,6 +11,7 @@ export const useWWFFSpots = () => {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [lastChecked, setLastChecked] = useState(null);
+  const lastNewestSpotRef = useRef(null);
   const fetchRef = useRef(null);
 
   useEffect(() => {
@@ -21,7 +22,17 @@ export const useWWFFSpots = () => {
         if (res?.ok) {
           const spots = await res.json();
           console.log(`[WWFF] Fetched ${Array.isArray(spots) ? spots.length : 0} spots`);
-          setLastUpdated(Date.now());
+          
+          // Only mark as "updated" when data content actually changes
+          let newestTime = null;
+          if (Array.isArray(spots) && spots.length > 0) {
+            const times = spots.map(s => s.spot_time).filter(Boolean).sort((a, b) => b - a);
+            newestTime = times[0] || null;
+          }
+          if (newestTime !== lastNewestSpotRef.current || lastNewestSpotRef.current === null) {
+            lastNewestSpotRef.current = newestTime;
+            setLastUpdated(Date.now());
+          }
 
           // Filter out QRT spots and nearly-expired spots, then sort by most recent
           const validSpots = spots

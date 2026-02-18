@@ -34,6 +34,7 @@ export const usePOTASpots = () => {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [lastChecked, setLastChecked] = useState(null);
+  const lastNewestSpotRef = useRef(null);
   const fetchRefPOTA = useRef(null);
 
   useEffect(() => {
@@ -44,7 +45,21 @@ export const usePOTASpots = () => {
         if (res?.ok) {
           const spots = await res.json();
           console.log(`[POTA] Fetched ${Array.isArray(spots) ? spots.length : 0} spots`);
-          setLastUpdated(Date.now());
+          
+          // Log newest spot time for staleness debugging
+          let newestTime = null;
+          if (Array.isArray(spots) && spots.length > 0) {
+            const times = spots.map(s => s.spotTime).filter(Boolean).sort().reverse();
+            newestTime = times[0] || null;
+            if (newestTime) console.log(`[POTA] Newest spot: ${newestTime}`);
+          }
+          
+          // Only mark as "updated" when data content actually changes
+          // (POTA API may return same stale spots for extended periods)
+          if (newestTime !== lastNewestSpotRef.current || lastNewestSpotRef.current === null) {
+            lastNewestSpotRef.current = newestTime;
+            setLastUpdated(Date.now());
+          }
 
           // Filter out QRT spots and nearly-expired spots, then sort by most recent
           const validSpots = spots
