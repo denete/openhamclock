@@ -25,7 +25,7 @@ export const LANGUAGES = [
   { code: 'ko', name: '한국어', flag: '🇰🇷' },
   { code: 'it', name: 'Italiano', flag: '🇮🇹' },
   { code: 'sl', name: 'Slovenščina', flag: '🇸🇮' },
-  { code: 'ms', name: 'Bahasa Melayu', flag: '🇲🇾' }
+  { code: 'ms', name: 'Melayu', flag: '🇲🇾' }
 ];
 
 export const resources = {
