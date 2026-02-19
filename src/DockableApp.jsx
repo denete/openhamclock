@@ -1069,10 +1069,6 @@ export const DockableApp = ({
             onClick={(e) => {
               e.stopPropagation();
               adjustZoom(selectedComponent, -1);
-            className="flexlayout__tab_toolbar_button"
-            onClick={(e) => {
-              e.stopPropagation();
-              adjustZoom(selectedComponent, -1);
             }}
             style={{
               fontSize: '11px',
