@@ -40,9 +40,10 @@ export const ActivatePanel = ({
             onClick={onToggleMap}
             title={showOnMap ? `Hide ${name} activators on map` : `Show ${name} activators on map`}
             style={{
-              background: showOnMap ? 'rgba(68, 204, 68, 0.3)' : 'rgba(100, 100, 100, 0.3)',
-              border: `1px solid ${showOnMap ? shade : '#666'}`,
-              color: showOnMap ? shade : '#888',
+              // background: showOnMap ? 'rgba(68, 204, 68, 0.3)' : 'rgba(100, 100, 100, 0.3)',
+              background: showOnMap ? 'rgba(255, 170, 0, 0.22)' : 'rgba(100, 100, 100, 0.3)',
+              border: `1px solid ${showOnMap ? '#ffaa00' : '#666'}`,
+              color: showOnMap ? '#ffaa00' : '#888',
               padding: '1px 6px',
               borderRadius: '3px',
               fontSize: '9px',
