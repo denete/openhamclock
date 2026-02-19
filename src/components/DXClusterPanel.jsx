@@ -267,7 +267,6 @@ export const DXClusterPanel = ({
                   }}
                 >
                   de <CallsignLink call={spot.spotter || '?'} color="var(--text-muted)" fontSize="10px" />
-
                 </div>
                 <div
                   style={{
