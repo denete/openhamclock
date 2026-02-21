@@ -150,6 +150,7 @@ export const DockableApp = ({
   const [targetTabSetId, setTargetTabSetId] = useState(null);
   const saveTimeoutRef = useRef(null);
   const [effectiveUnits, setEffectiveUnits] = useState(() => getEffectiveUnits(config?.units));
+  const [showDXLocalTime, setShowDXLocalTime] = useState(false);
 
   // Fallback: if parent did not provide map-layer toggles (seen with rotator),
   // use the internal hook so the map buttons still work.
@@ -412,16 +413,22 @@ export const DockableApp = ({
             <div style={{ color: 'var(--accent-amber)', fontSize: '22px', fontWeight: '700' }}>{dxGrid}</div>
             {(() => {
               const utcOffsetH = Math.round(dxLocation.lon / 15);
-              const dxDate = new Date(currentTime.getTime() + utcOffsetH * 3600000);
-              const hh = String(dxDate.getUTCHours()).padStart(2, '0');
-              const mm = String(dxDate.getUTCMinutes()).padStart(2, '0');
+              const localDxDate = new Date(currentTime.getTime() + utcOffsetH * 3600000);
+              const utcHh = String(currentTime.getUTCHours()).padStart(2, '0');
+              const utcMm = String(currentTime.getUTCMinutes()).padStart(2, '0');
+              const localHh = String(localDxDate.getUTCHours()).padStart(2, '0');
+              const localMm = String(localDxDate.getUTCMinutes()).padStart(2, '0');
               const sign = utcOffsetH >= 0 ? '+' : '';
+              const isLocal = showDXLocalTime;
               return (
                 <div style={{ color: 'var(--accent-cyan)', fontSize: '13px', marginTop: '2px' }}>
-                  {hh}:{mm}{' '}
-                  <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
-                    (UTC{sign}
-                    {utcOffsetH})
+                  {isLocal ? `${localHh}:${localMm}` : `${utcHh}:${utcMm}`}{' '}
+                  <span
+                    onClick={() => setShowDXLocalTime((prev) => !prev)}
+                    title={isLocal ? 'Show UTC time' : `Show local time at DX destination (UTC${sign}${utcOffsetH})`}
+                    style={{ color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer', userSelect: 'none' }}
+                  >
+                    ({isLocal ? `Local UTC${sign}${utcOffsetH}` : 'UTC'}) ⇄
                   </span>
                 </div>
               );
