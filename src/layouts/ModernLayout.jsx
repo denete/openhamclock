@@ -15,6 +15,7 @@ import {
   AnalogClockPanel,
 } from '../components';
 import { useRig } from '../contexts/RigContext.jsx';
+import { calculateDistance, formatDistance } from '../utils/geo.js';
 
 export default function ModernLayout(props) {
   const {
@@ -62,7 +63,6 @@ export default function ModernLayout(props) {
     mySpots,
     dxpeditions,
     contests,
-    satellites,
     pskReporter,
     wsjtx,
     filteredPskSpots,
@@ -298,20 +298,13 @@ export default function ModernLayout(props) {
                   <div style={{ fontSize: '13px', paddingTop: '6px', borderTop: '1px solid var(--border-color)' }}>
                     <span style={{ color: 'var(--accent-cyan)', fontWeight: '700' }}>
                       {(() => {
-                        // Haversine distance formula
-                        const R = 6371; // Earth radius in km
-                        const deLat = (config.location.lat * Math.PI) / 180;
-                        const deLon = (config.location.lon * Math.PI) / 180;
-                        const dxLat = (dxLocation.lat * Math.PI) / 180;
-                        const dxLon = (dxLocation.lon * Math.PI) / 180;
-                        const dLat = dxLat - deLat;
-                        const dLon = dxLon - deLon;
-                        const a =
-                          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                          Math.cos(deLat) * Math.cos(dxLat) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-                        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                        const km = R * c;
-                        return `📏 ${Math.round(km).toLocaleString()} km`;
+                        const km = calculateDistance(
+                          config.location.lat,
+                          config.location.lon,
+                          dxLocation.lat,
+                          dxLocation.lon,
+                        );
+                        return `📏 ${formatDistance(km, config.units)}`;
                       })()}
                     </span>
                   </div>

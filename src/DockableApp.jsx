@@ -37,6 +37,19 @@ import './styles/flexlayout-openhamclock.css';
 import useMapLayers from './hooks/app/useMapLayers';
 import useRotator from './hooks/useRotator';
 
+const getEffectiveUnits = (fallback = 'imperial') => {
+  try {
+    const raw = localStorage.getItem('openhamclock_config');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.units === 'metric' || parsed?.units === 'imperial') {
+        return parsed.units;
+      }
+    }
+  } catch {}
+  return fallback === 'metric' || fallback === 'imperial' ? fallback : 'imperial';
+};
+
 // Icons
 const PlusIcon = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -136,6 +149,7 @@ export const DockableApp = ({
   const [showPanelPicker, setShowPanelPicker] = useState(false);
   const [targetTabSetId, setTargetTabSetId] = useState(null);
   const saveTimeoutRef = useRef(null);
+  const [effectiveUnits, setEffectiveUnits] = useState(() => getEffectiveUnits(config?.units));
 
   // Fallback: if parent did not provide map-layer toggles (seen with rotator),
   // use the internal hook so the map buttons still work.
@@ -177,6 +191,17 @@ export const DockableApp = ({
       localStorage.setItem('openhamclock_panelZoom', JSON.stringify(panelZoom));
     } catch {}
   }, [panelZoom]);
+
+  useEffect(() => {
+    const syncUnits = () => setEffectiveUnits(getEffectiveUnits(config?.units));
+    syncUnits();
+    window.addEventListener('storage', syncUnits);
+    window.addEventListener('openhamclock-config-change', syncUnits);
+    return () => {
+      window.removeEventListener('storage', syncUnits);
+      window.removeEventListener('openhamclock-config-change', syncUnits);
+    };
+  }, [config?.units]);
 
   const ZOOM_STEPS = [0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.5, 1.75, 2.0];
   const adjustZoom = useCallback((component, delta) => {
@@ -432,7 +457,7 @@ export const DockableApp = ({
             </div>
             <div style={{ fontSize: '13px', paddingTop: '6px', borderTop: '1px solid var(--border-color)' }}>
               <span style={{ color: 'var(--accent-cyan)', fontWeight: '700' }}>
-                📏 {formatDistance(distanceKm, config.units)}
+                📏 {formatDistance(distanceKm, effectiveUnits)}
               </span>
             </div>
           </div>
