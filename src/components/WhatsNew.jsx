@@ -12,8 +12,10 @@ const CHANGELOG = [
   {
     version: '15.5.10',
     date: '2026-02-20',
-    heading: "Server stability, smarter failovers, ultrawide layout support, and two new languages. Also — we're moving to weekly Tuesday releases!",
-    notice: '📅 Starting now, OpenHamClock updates will ship on Tuesday nights (EST) only. One release per week means more testing, fewer surprises, and better stability for everyone.',
+    heading:
+      "Server stability, smarter failovers, ultrawide layout support, and two new languages. Also — we're moving to weekly Tuesday releases!",
+    notice:
+      '📅 Starting now, OpenHamClock updates will ship on Tuesday nights (EST) only. One release per week means more testing, fewer surprises, and better stability for everyone.',
     features: [
       {
         icon: '🔇',
@@ -23,7 +25,7 @@ const CHANGELOG = [
       {
         icon: '🛰️',
         title: 'TLE Multi-Source Failover',
-        desc: "Satellite TLE data was failing because CelesTrak rate-limited our server IP. TLEs now automatically failover across three sources: CelesTrak → CelesTrak legacy → AMSAT. If a source returns 429/403 it immediately tries the next. Cache extended from 6 to 12 hours, with stale data served up to 48 hours while retrying. 30-minute negative cache prevents hammering when all sources are down. Self-hosters can reorder sources via TLE_SOURCES env var.",
+        desc: 'Satellite TLE data was failing because CelesTrak rate-limited our server IP. TLEs now automatically failover across three sources: CelesTrak → CelesTrak legacy → AMSAT. If a source returns 429/403 it immediately tries the next. Cache extended from 6 to 12 hours, with stale data served up to 48 hours while retrying. 30-minute negative cache prevents hammering when all sources are down. Self-hosters can reorder sources via TLE_SOURCES env var.',
       },
       {
         icon: '🌙',
