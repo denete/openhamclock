@@ -150,6 +150,7 @@ const App = () => {
   useEffect(() => {
     const handleKey = (e) => {
       if (
+        e.ctrlKey || e.metaKey || e.altKey ||
         showSettings ||
         showDXFilters ||
         showPSKFilters ||
