@@ -81,20 +81,13 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
 
     const Control = L.Control.extend({
       options: { position: 'topright' },
-      onAdd() {
-        const div = L.DomUtil.create('div', 'n3fjp-control');
-        div.style.cssText = `
-          background: var(--bg-panel);
-          padding: 10px;
-          border-radius: 8px;
-          border: 1px solid var(--border-color);
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 11px;
-          color: var(--text-primary);
-          min-width: 190px;
-        `;
+      onAdd: function () {
+        const panelWrapper = L.DomUtil.create('div', 'panel-wrapper');
+        const div = L.DomUtil.create('div', 'n3fjp-control', panelWrapper);
+
         div.innerHTML = `
-          <div style="margin-bottom: 8px;">🗺️ N3FJP Logged QSOs</div>
+        <div class="floating-panel-header">🗺️ N3FJP Logged QSOs</div>
+
           <div id="n3fjp-stats" style="display: grid; gap: 4px;">
             <div>QSOs: <span style="color: var(--accent-cyan);">${qsos.length}</span></div>
             <div>Display: <span style="color: var(--accent-amber);">${displayMinutes} min</span></div>
@@ -105,7 +98,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
 
         L.DomEvent.disableClickPropagation(div);
         L.DomEvent.disableScrollPropagation(div);
-        return div;
+        return panelWrapper;
       },
     });
 
@@ -113,26 +106,26 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
     map.addControl(controlRef.current);
 
     setTimeout(() => {
-      const container = controlRef.current?._container;
-      if (!container) return;
+      const container = document.querySelector('.n3fjp-control');
+      if (container) {
+        const saved = localStorage.getItem('n3fjp-position');
+        if (saved) {
+          try {
+            const { top, left } = JSON.parse(saved);
+            container.style.position = 'fixed';
+            container.style.top = top + 'px';
+            container.style.left = left + 'px';
+            container.style.right = 'auto';
+            container.style.bottom = 'auto';
+          } catch {}
+        }
 
-      const saved = localStorage.getItem('n3fjp-position');
-      if (saved) {
-        try {
-          const { top, left } = JSON.parse(saved);
-          container.style.position = 'fixed';
-          container.style.top = top + 'px';
-          container.style.left = left + 'px';
-          container.style.right = 'auto';
-          container.style.bottom = 'auto';
-        } catch {}
+        makeDraggable(container, 'n3fjp-position', { snap: 5 });
+        addMinimizeToggle(container, 'n3fjp-position', {
+          contentClassName: 'n3fjp-panel-content',
+          buttonClassName: 'n3fjp-minimize-btn',
+        });
       }
-
-      addMinimizeToggle(container, 'n3fjp-position', {
-        contentClassName: 'n3fjp-panel-content',
-        buttonClassName: 'n3fjp-minimize-btn',
-      });
-      makeDraggable(container, 'n3fjp-position');
     }, 150);
 
     return () => {
