@@ -417,6 +417,7 @@ export const DockableApp = ({
       'on-air': { name: 'On Air', icon: '🔴' },
       'id-timer': { name: 'ID Timer', icon: '📢' },
       keybindings: { name: 'Keyboard Shortcuts', icon: '⌨️' },
+      'lock-layout': { name: 'Lock Layout', icon: '🔒' },
     };
   }, [isLocalInstall]);
 
@@ -945,6 +946,35 @@ export const DockableApp = ({
           content = <KeybindingsPanel keybindings={keybindingsList} nodeId={nodeId} />;
           break;
 
+        case 'lock-layout':
+          content = (
+            <button
+              onClick={toggleLayoutLock}
+              title={
+                layoutLocked
+                  ? 'Unlock layout — allow drag, resize, and close'
+                  : 'Lock layout — prevent accidental changes'
+              }
+              className="panel-layout-lock-button"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                background: layoutLocked ? 'rgba(255, 170, 0, 0.15)' : 'var(--bg-tertiary)',
+                border: `1px solid ${layoutLocked ? 'var(--accent-amber)' : 'var(--border-color)'}`,
+                borderRadius: '4px',
+                padding: '3px 8px',
+                fontSize: '11px',
+                fontFamily: 'JetBrains Mono, monospace',
+                color: layoutLocked ? 'var(--accent-amber)' : 'var(--text-muted)',
+                cursor: 'pointer',
+              }}
+            >
+              {layoutLocked ? '🔒' : '🔓'} Layout {layoutLocked ? 'Locked' : 'Unlocked'}
+            </button>
+          );
+          break;
+
         default:
           content = (
             <div style={{ padding: '20px', color: '#ff6b6b', textAlign: 'center' }}>
@@ -1222,29 +1252,7 @@ export const DockableApp = ({
           justifyContent: 'flex-end',
           padding: '2px 16px 0',
         }}
-      >
-        <button
-          onClick={toggleLayoutLock}
-          title={
-            layoutLocked ? 'Unlock layout — allow drag, resize, and close' : 'Lock layout — prevent accidental changes'
-          }
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            background: layoutLocked ? 'rgba(255, 170, 0, 0.15)' : 'var(--bg-tertiary)',
-            border: `1px solid ${layoutLocked ? 'var(--accent-amber)' : 'var(--border-color)'}`,
-            borderRadius: '4px',
-            padding: '3px 8px',
-            fontSize: '11px',
-            fontFamily: 'JetBrains Mono, monospace',
-            color: layoutLocked ? 'var(--accent-amber)' : 'var(--text-muted)',
-            cursor: 'pointer',
-          }}
-        >
-          {layoutLocked ? '🔒' : '🔓'} Layout {layoutLocked ? 'Locked' : 'Unlocked'}
-        </button>
-      </div>
+      ></div>
 
       {/* Dockable Layout */}
       <div style={{ flex: 1, position: 'relative', padding: '8px', minHeight: 0 }}>

@@ -361,6 +361,23 @@ body::before {
 }
 
 /* ============================================
+   LOCK LAYOUT PANEL
+   ============================================ */
+.panel-layout-lock-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--accent-amber);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono, monospace';
+  cursor: 'pointer';
+  margin: 1em auto;
+}
+
+/* ============================================
    CUSTOM MARKER STYLES
    ============================================ */
 .custom-marker {
